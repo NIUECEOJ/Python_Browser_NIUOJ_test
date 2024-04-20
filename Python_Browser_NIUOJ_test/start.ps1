@@ -1,11 +1,14 @@
-# Set output encoding to UTF-8
-[System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
 # Get the current script directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Set command prompt encoding to UTF-8
-chcp 65001
+# Get PowerShell profile path
+$profilePath = $PROFILE.CurrentUserAllHosts
+
+# If the PowerShell profile file doesn't exist, create it with UTF-8 encoding settings
+if (-not (Test-Path $profilePath)) {
+    New-Item -Path $profilePath -ItemType File -Force | Out-Null
+    Add-Content -Path $profilePath -Value '$OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [Text.UTF8Encoding]::UTF8'
+}
 
 # Get PowerShell 7 path
 $pwsh7Path = & {
@@ -50,6 +53,17 @@ if (-not $pwsh7Path) {
     if (-not $pwsh7Path) {
         Write-Error "Failed to install PowerShell 7, please install manually and try again"
         exit 1
+    }
+}
+
+# Get PowerShell 7 profile path
+$pwsh7ProfilePath = & $pwsh7Path -NoProfile -Command { $PROFILE.CurrentUserAllHosts }
+
+# If the PowerShell 7 profile file doesn't exist, create it with UTF-8 encoding settings
+if (-not (Test-Path $pwsh7ProfilePath)) {
+    New-Item -Path $pwsh7ProfilePath -ItemType File -Force | Out-Null
+    & $pwsh7Path -NoProfile -Command {
+        Add-Content -Path $PROFILE.CurrentUserAllHosts -Value '$OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [Text.UTF8Encoding]::UTF8'
     }
 }
 
