@@ -159,9 +159,42 @@ class MainWindow(QMainWindow):
 
         # 顯示一個消息框詢問用戶是否確定要重啟電腦
         reply = QMessageBox.question(self, '確認退出考試？', '您確定要退出考試，將無法重新進入考場？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
+        
         if reply == QMessageBox.Yes:
             self.logger.log('User confirmed reboot')
+            
+            # 讀取日誌檔案的行數
+            line_count = 0
+            with open('status.log', 'r') as f:
+                line_count = len(f.readlines())
+            
+            # 創建進度條對話框
+            progress_dialog = QProgressDialog("正在上傳日誌...", "取消", 0, line_count, self)
+            progress_dialog.setWindowModality(Qt.WindowModal)
+            progress_dialog.show()
+            
+            # 模擬上傳過程
+            for i in range(line_count):
+                # 更新進度條
+                progress_dialog.setValue(i)
+                if progress_dialog.wasCanceled():
+                    self.logger.log('upload_cancelled')
+                    break
+                # 模擬上傳延遲
+                time.sleep(0.1)
+
+            # 上傳完成
+            progress_dialog.setValue(line_count)
+
+            # 上傳日誌到伺服器
+            with open('status.log', 'rb') as f:
+                response = requests.post('http://192.168.6.2:8000/upload', files={'file': f})
+                if response.status_code == 200:
+                    self.logger.log('upload_success')
+                    # 上傳成功後關閉電腦
+                else:
+                    self.logger.log('upload_fail')
+            
             try:
                 # Windows 系統重啟命令
                 os.system('shutdown /r /t 1')
