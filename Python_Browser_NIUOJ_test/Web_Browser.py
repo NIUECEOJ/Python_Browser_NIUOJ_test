@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import threading
 from datetime import datetime
 import requests
 from PyQt5.QtCore import Qt, QUrl, QTimer
@@ -11,10 +12,27 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 class Logger:
     def __init__(self, filename):
         self.filename = filename
+        self.last_logged_message = None
 
     def log(self, message):
         with open(self.filename, 'a') as f:
             f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},{message}\n')
+        if message != self.last_logged_message:
+            self.last_logged_message = message
+            threading.Thread(target=self.upload_log, args=(log_entry,)).start()
+            
+    def upload_log(self, log_entry):
+        url = 'http://192.168.6.2:8000/status'
+        while True:
+            try:
+                response = requests.post(url, data=log_entry)
+                if response.status_code == 200:
+                    print("日誌成功上傳。")
+                    break  # 如果狀態碼為200，跳出循環
+                else:
+                    print(f"上傳失敗，狀態碼：{response.status_code}。重試中...")
+            except requests.exceptions.RequestException as e:
+                print(f"上傳過程中出現錯誤：{e}。重試中...")
 
 class UploadingMessageBox(QMessageBox):
     def __init__(self, *__args):
