@@ -21,3 +21,5 @@ exit /b
 
 :del_status.log
 del /F /Q C:\Windows\System32\status.log 2>nul || (echo error someone using files & exit /b)
+del /F /Q .\status.log 2>nul || (echo error someone using files & exit /b)
+
