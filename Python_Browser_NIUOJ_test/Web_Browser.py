@@ -16,6 +16,21 @@ class Logger:
         with open(self.filename, 'a') as f:
             f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},{message}\n')
 
+class UploadingMessageBox(QMessageBox):
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setWindowTitle('上傳logs')
+        self.setText('正在上傳考試資料，請勿關閉電腦')
+        self.setStandardButtons(QMessageBox.NoButton)  # 移除所有標準按鈕
+
+    # 重寫 closeEvent 方法來禁止對話框被關閉
+    def closeEvent(self, event):
+        event.ignore()
+        
+    # 添加一個方法來關閉對話框
+    def close_message_box(self):
+        self.close()
+
 class PasswordDialog(QDialog):
     def __init__(self, parent=None):
         super(PasswordDialog, self).__init__(parent)
@@ -159,17 +174,42 @@ class MainWindow(QMainWindow):
 
         # 顯示一個消息框詢問用戶是否確定要重啟電腦
         reply = QMessageBox.question(self, '確認退出考試？', '您確定要退出考試，將無法重新進入考場？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
+        
         if reply == QMessageBox.Yes:
             self.logger.log('User confirmed reboot')
-            try:
-                # Windows 系統重啟命令
-                os.system('shutdown /r /t 1')
-            except Exception as e:
-                self.logger.log(f'Failed to reboot: {e}')
-                QMessageBox.warning(self, '警告', '無法重啟電腦。')
-                event.ignore()  # 忽略關閉事件，不關閉應用程式
-                return  # 提前返回，不執行下面的關閉代碼
+            
+            # 讀取日誌檔案的行數
+            line_count = 0
+            with open('status.log', 'r') as f:
+                line_count = len(f.readlines())
+            
+            # 創建請等待對話框
+            Uploading_msg_box = UploadingMessageBox()
+            Uploading_msg_box.show()
+
+
+            # 上傳日誌到伺服器
+            with open('status.log', 'rb') as f:
+                response = requests.post('http://192.168.6.2:8000/upload', files={'file': f})
+                if response.status_code == 200:
+                    self.logger.log('upload_success')
+                    # 上傳完成關閉請等待對話框
+                    Uploading_msg_box.close_message_box()
+                    # 上傳成功後關閉電腦
+                    try:
+                        # Windows 系統重啟命令
+                        os.system('shutdown /r /t 1')
+                        #QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
+                    except Exception as e:
+                        self.logger.log(f'Failed to reboot: {e}')
+                        QMessageBox.warning(self, '警告', '無法重啟電腦。')
+                        event.ignore()  # 忽略關閉事件，不關閉應用程式
+                        return  # 提前返回，不執行下面的關閉代碼
+                else:
+                    self.logger.log('upload_fail')
+                    QMessageBox.warning(self, '警告', '日誌上傳失敗，請檢查網路連接。')
+                    event.ignore()  # 忽略關閉事件，不關閉應用程式
+                    return  # 提前返回，不執行下面的關閉代碼 
         else:
             self.logger.log('User cancelled reboot')
             event.ignore()  # 用戶選擇不重啟，忽略關閉事件
