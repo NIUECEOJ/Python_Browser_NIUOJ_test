@@ -42,6 +42,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.password_dialog_open = False
+        self.check_fullscreen_topest = True  # 新增一個標誌來控制全螢幕檢查、頂層
         # 初始化退出按鈕
         self.init_exit_button()
         self.left_browser = QWebEngineView()
@@ -99,31 +100,32 @@ class MainWindow(QMainWindow):
     def log_url_change(self, url):
         self.logger.log(f'url_changed,{url.toString()}')
 
-    def start_fullscreen_check(self):
-        if not self.isFullScreen():
-            self.logger.log('not_fullscreen')
-            dialog = PasswordDialog(self)
-            self.password_dialog_open = True
-            while dialog.exec_() == QDialog.Accepted:
-                password = dialog.password()
-                if password != 'NIUeceJefery':
-                    self.logger.log('password_fail')
-                else:
-                    self.logger.log('password_correct')
-                    self.password_dialog_open = False
-                    break
-        if QApplication.activeWindow() != self:
-            self.logger.log('not_uppest_windows')
-            dialog = PasswordDialog(self)
-            self.password_dialog_open = True
-            while dialog.exec_() == QDialog.Accepted:
-                password = dialog.password()
-                if password != 'NIUeceJefery':
-                    self.logger.log('password_fail')
-                else:
-                    self.logger.log('password_correct')
-                    self.password_dialog_open = False
-                    break
+    def start_fullscreen_check(self): # 檢查是否為全螢幕或最頂層
+         if self.check_fullscreen_topest:
+            if not self.isFullScreen():
+                self.logger.log('not_fullscreen')
+                dialog = PasswordDialog(self)
+                self.password_dialog_open = True
+                while dialog.exec_() == QDialog.Accepted:
+                    password = dialog.password()
+                    if password != 'NIUeceJefery':
+                        self.logger.log('password_fail')
+                    else:
+                        self.logger.log('password_correct')
+                        self.password_dialog_open = False
+                        break
+            if QApplication.activeWindow() != self:
+                self.logger.log('not_uppest_windows')
+                dialog = PasswordDialog(self)
+                self.password_dialog_open = True
+                while dialog.exec_() == QDialog.Accepted:
+                    password = dialog.password()
+                    if password != 'NIUeceJefery':
+                        self.logger.log('password_fail')
+                    else:
+                        self.logger.log('password_correct')
+                        self.password_dialog_open = False
+                        break
         QTimer.singleShot(1000, self.start_fullscreen_check)
 
     def start_logging(self):
@@ -134,6 +136,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # 在關閉視窗前輸出日誌
         self.logger.log('trylogout')
+        self.check_fullscreen = False
 
         # 顯示一個消息框詢問用戶是否確定要重啟電腦
         reply = QMessageBox.question(self, '確認退出考試？', '您確定要退出考試，將無法重新進入考場？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -156,6 +159,7 @@ class MainWindow(QMainWindow):
         # 如果用戶確認重啟，則記錄日誌並關閉應用程式
         self.logger.log('logout')
         super(MainWindow, self).closeEvent(event)  # 繼續執行預設的關閉事件
+        self.check_fullscreen = True
 
 app = QApplication(sys.argv)
 window = MainWindow()
