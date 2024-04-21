@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
     
     # 檢查是否為全螢幕或最頂層
     def start_fullscreen_check(self): 
-         if self.check_fullscreen_topest:
+        if self.check_fullscreen_topest:
             if not self.isFullScreen():
                 self.logger.log('not_fullscreen')
                 dialog = PasswordDialog(self)
@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
                         self.password_dialog_open = False
                         break
         QTimer.singleShot(1000, self.start_fullscreen_check)
+
 
     def start_logging(self):
         if not self.password_dialog_open:
