@@ -99,8 +99,9 @@ class MainWindow(QMainWindow):
     
     def log_url_change(self, url):
         self.logger.log(f'url_changed,{url.toString()}')
-
-    def start_fullscreen_check(self): # 檢查是否為全螢幕或最頂層
+    
+    # 檢查是否為全螢幕或最頂層
+    def start_fullscreen_check(self): 
          if self.check_fullscreen_topest:
             if not self.isFullScreen():
                 self.logger.log('not_fullscreen')
