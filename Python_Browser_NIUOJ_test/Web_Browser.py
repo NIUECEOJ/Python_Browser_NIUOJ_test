@@ -19,7 +19,7 @@ class Logger:
 class PasswordDialog(QDialog):
     def __init__(self, parent=None):
         super(PasswordDialog, self).__init__(parent)
-        self.setWindowTitle('Password Input')
+        self.setWindowTitle('偵測到作弊請聯絡助教與教授')
         self.layout = QVBoxLayout(self)
         self.password_edit = QLineEdit(self)
         self.password_edit.setEchoMode(QLineEdit.Password)
