@@ -6,7 +6,7 @@ import requests
 from PyQt5.QtCore import Qt, QUrl, QTimer
 from PyQt5.QtGui import QMouseEvent, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton, QMessageBox, QWidget, QToolBar
-from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineView
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 
 class Logger:
     def __init__(self, filename):
@@ -37,10 +37,19 @@ class PasswordDialog(QDialog):
     def start_logging(self):
         self.logger.log('entering_password')
         QTimer.singleShot(1000, self.start_logging)
-        
+
+class WebEnginePage(QWebEnginePage):
+    def acceptNavigationRequest(self, url, _type, isMainFrame):
+        # 只允許訪問 '192.168.6.2' 開頭的網址
+        if url.toString().startswith("http://192.168.6.2"):
+            return True
+        return False
+
+# 在創建 QWebEngineView 時，使用自定義的 WebEnginePage
 class WebEngineView(QWebEngineView):
     def __init__(self, parent=None):
         super(WebEngineView, self).__init__(parent)
+        self.setPage(WebEnginePage(self))
 
     def contextMenuEvent(self, event):
         # 不執行任何操作，從而禁用右鍵菜單
