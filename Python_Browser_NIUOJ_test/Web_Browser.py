@@ -5,7 +5,7 @@ from datetime import datetime
 import requests
 from PyQt5.QtCore import Qt, QUrl, QTimer
 from PyQt5.QtGui import QMouseEvent, QKeyEvent
-from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton, QMessageBox
+from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton, QMessageBox, QWidget, QToolBar
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 class Logger:
@@ -42,6 +42,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.password_dialog_open = False
+        # 初始化退出按鈕
+        self.init_exit_button()
         self.left_browser = QWebEngineView()
         self.left_browser.setUrl(QUrl('http://192.168.6.2'))
         self.left_browser.urlChanged.connect(self.log_url_change)
@@ -53,6 +55,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.right_browser)
         self.setCentralWidget(splitter)
         self.showFullScreen()
+        
         
 
         self.logger = Logger('status.log')
@@ -75,7 +78,24 @@ class MainWindow(QMainWindow):
                                 break
         self.start_logging()
         QTimer.singleShot(5000, self.start_fullscreen_check)
+    
+    def init_exit_button(self):
+        # 創建退出按鈕並設定其屬性
+        self.exit_button = QPushButton('退出', self)
+        self.exit_button.clicked.connect(self.close)
+        self.exit_button.setFixedSize(80, 40)  # 為按鈕設定固定大小
 
+        # 創建一個工具欄並將退出按鈕添加到其中
+        exit_toolbar = QToolBar("Exit Toolbar", self)
+        exit_toolbar.addWidget(self.exit_button)
+        exit_toolbar.setMovable(False)  # 防止工具欄被移動
+        exit_toolbar.setFloatable(False)  # 防止工具欄浮動
+        exit_toolbar.setStyleSheet("QToolBar { border: 0px }")  # 隱藏工具欄的邊框
+
+        # 將工具欄添加到主視窗的右上角
+        self.addToolBar(Qt.TopToolBarArea, exit_toolbar)
+        self.insertToolBarBreak(exit_toolbar)
+    
     def log_url_change(self, url):
         self.logger.log(f'url_changed,{url.toString()}')
 
