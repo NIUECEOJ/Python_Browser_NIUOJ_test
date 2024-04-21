@@ -1,7 +1,7 @@
 import sys
-from PyQt5.QtCore import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtWebEngineWidgets import *
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 class MainWindow(QMainWindow):
     def __init__(self):
