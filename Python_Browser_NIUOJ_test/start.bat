@@ -13,9 +13,9 @@ set "python_path=%python_exe%"
 set "script_path=.\Web_Browser.py"
 
 echo Installing required Python libraries...
-%python_path% -m pip install --upgrade pip
-%python_path% -m pip install PyQt5
-%python_path% -m pip install PyQtWebEngine
+python -m pip install --upgrade pip
+python -m pip install PyQt5
+python -m pip install PyQtWebEngine
 
 :restart
 echo Running Python script with admin privileges...
@@ -37,7 +37,7 @@ exit /b
 :run_script
 echo %python_path%
 echo %script_path%
-"%python_path%" "%~dp0%script_path%"
+python "%~dp0%script_path%"
 
 :check_script
 timeout /t 0.1 > nul
