@@ -136,7 +136,7 @@ class MainWindow(QMainWindow):
         self.logger.log('trylogout')
 
         # 顯示一個消息框詢問用戶是否確定要重啟電腦
-        reply = QMessageBox.question(self, '重啟確認', '您確定要重啟電腦嗎？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(self, '確認退出考試？', '您確定要退出考試，將無法重新進入考場？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
             self.logger.log('User confirmed reboot')
