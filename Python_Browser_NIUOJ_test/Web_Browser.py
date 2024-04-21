@@ -60,13 +60,15 @@ class MainWindow(QMainWindow):
                     last_time = datetime.strptime(last_time_str, "%Y.%m.%d.%H.%M.%S")
                     if (datetime.now() - last_time).total_seconds() > 10:
                         dialog = PasswordDialog(self)
-                        if dialog.exec_() == QDialog.Accepted:
+                        while dialog.exec_() == QDialog.Accepted:
                             password = dialog.password()
                             if password != 'Jefery':
-                                sys.exit()
-                        # Write 'entering_password' to status.log
-                        with open('status.log', 'a') as f:
-                            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},entering_password\n')
+                                with open('status.log', 'a') as f:
+                                    f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},password_fail\n')
+                            else:
+                                with open('status.log', 'a') as f:
+                                    f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},password_correct\n')
+                                break
                     else:
                         with open('status.log', 'a') as f:
                             f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n')
