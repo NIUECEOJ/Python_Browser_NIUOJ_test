@@ -3,6 +3,7 @@ import os
 import time
 from datetime import datetime
 from PyQt5.QtCore import Qt, QUrl, QTimer
+from PyQt5.QtGui import QMouseEvent, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
@@ -47,8 +48,10 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         self.left_browser = QWebEngineView()
         self.left_browser.setUrl(QUrl('http://192.168.6.2'))
+        self.left_browser.urlChanged.connect(self.log_url_change)
         self.right_browser = QWebEngineView()
         self.right_browser.setUrl(QUrl('http://192.168.6.2/IDE'))
+        self.right_browser.urlChanged.connect(self.log_url_change)
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self.left_browser)
         splitter.addWidget(self.right_browser)
@@ -81,6 +84,27 @@ class MainWindow(QMainWindow):
         
         # Start fullscreen status checking after 5 seconds
         QTimer.singleShot(5000, self.start_fullscreen_check)
+    """    
+    def eventFilter(self, source, event):
+        if isinstance(event, QMouseEvent):
+            if event.type() == QEvent.MouseButtonPress:
+                self.log_mouse_event(event)
+        elif isinstance(event, QKeyEvent):
+            if event.type() == QEvent.KeyPress:
+                self.log_key_event(event)
+        return super(MainWindow, self).eventFilter(source, event)
+
+    def log_mouse_event(self, event):
+        with open('status.log', 'a') as f:
+            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},mouse_event,{event.pos()}\n')
+
+    def log_key_event(self, event):
+        with open('status.log', 'a') as f:
+            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},key_event,{event.text()}\n')
+    """
+    def log_url_change(self, url):
+        with open('status.log', 'a') as f:
+            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},url_changed,{url.toString()}\n')    
         
     def start_fullscreen_check(self):
         # Check if the application is in fullscreen mode
@@ -130,6 +154,9 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(1000, self.start_logging)
 
 app = QApplication(sys.argv)
-print(os.path.abspath('status.log'))  # Print log file path
+#print(os.path.abspath('status.log'))  # Print log file path
 window = MainWindow()
+"""
+window.installEventFilter(window)
+"""
 app.exec_()
