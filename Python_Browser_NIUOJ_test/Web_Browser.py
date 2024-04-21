@@ -137,7 +137,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # 在關閉視窗前輸出日誌
         self.logger.log('trylogout')
-        self.check_fullscreen = False
+        self.check_fullscreen_topest = False
 
         # 顯示一個消息框詢問用戶是否確定要重啟電腦
         reply = QMessageBox.question(self, '確認退出考試？', '您確定要退出考試，將無法重新進入考場？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -160,7 +160,7 @@ class MainWindow(QMainWindow):
         # 如果用戶確認重啟，則記錄日誌並關閉應用程式
         self.logger.log('logout')
         super(MainWindow, self).closeEvent(event)  # 繼續執行預設的關閉事件
-        self.check_fullscreen = True
+        self.check_fullscreen_topest = True
 
 app = QApplication(sys.argv)
 window = MainWindow()
