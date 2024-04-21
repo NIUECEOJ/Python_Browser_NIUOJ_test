@@ -12,6 +12,10 @@ if not defined python_exe (
 set "python_path=%python_exe%"
 set "script_path=.\Web_Browser.py"
 
+echo 正在安裝必要的 Python 庫...
+%python_path% -m pip install PyQt5
+%python_path% -m pip install PyQtWebEngine
+
 :restart
 echo 正在以系統管理員身份運行 Python 腳本...
 
