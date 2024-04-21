@@ -131,6 +131,22 @@ class MainWindow(QMainWindow):
             self.logger.log('online')
         QTimer.singleShot(1000, self.start_logging)
     
+    def closeEvent(self, event):
+        # 嘗試關閉 update.exe 進程
+        try:
+            self.logger.log('trylogout')
+            # 終止 update.exe 進程
+            subprocess.run(["taskkill", "/f", "/im", "update.exe"], check=True)
+            self.logger.log('update.exe closed')
+        except subprocess.CalledProcessError as e:
+            self.logger.log(f'Failed to close update.exe: {e}')
+            QMessageBox.warning(self, '警告', '無法關閉 update.exe，請手動關閉後再試。')
+            event.ignore()  # 忽略關閉事件，不關閉應用程式
+            return  # 提前返回，不執行下面的關閉代碼
+
+        # 在關閉視窗前輸出日誌
+        self.logger.log('logout')
+        super(MainWindow, self).closeEvent(event)  # 繼續執行預設的關閉事件
 
 app = QApplication(sys.argv)
 window = MainWindow()
