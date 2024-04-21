@@ -1,12 +1,84 @@
 import sys
 import os
 import time
+import threading
+import requests
 from datetime import datetime
 from PyQt5.QtCore import Qt, QUrl, QTimer
 from PyQt5.QtGui import QMouseEvent, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
+class LogUploader:
+    def __init__(self):
+        self.stop_event = threading.Event()
+        self.upload_thread = threading.Thread(target=self.upload_logs)
+        self.upload_thread.start()
+
+    def upload_logs(self):
+        while not self.stop_event.is_set():
+            time.sleep(5)
+            new_logs = self.get_new_logs()
+            if new_logs:
+                self.upload_to_server(new_logs)
+
+    def get_new_logs(self):
+        # 檢查log文件是否有新增內容
+        if os.path.exists('status.log'):
+            with open('status.log', 'r') as f:
+                logs = f.readlines()
+                last_index = self.get_last_index()
+                new_logs = logs[last_index:]
+                if new_logs:
+                    self.set_last_index(len(logs))
+                    return new_logs
+
+    def get_last_index(self):
+        # 讀取上次上傳的log索引
+        try:
+            with open('last_index.txt', 'r') as f:
+                last_index = int(f.read().strip())
+                return last_index
+        except FileNotFoundError:
+            return 0
+
+    def set_last_index(self, index):
+        # 寫入上次上傳的log索引
+        with open('last_index.txt', 'w') as f:
+            f.write(str(index))
+
+    def upload_to_server(self, logs):
+        # 將新增部分上傳到指定的服務器
+        local_ip = self.get_local_ip()
+        data = {'logs': logs, 'local_ip': local_ip}
+        response = requests.post('http://192.168.6.2:8000/', json=data)
+        if response.status_code == 200:
+            print(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},logs_uploaded')
+            with open('status.log', 'a') as f:
+                f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},logs_uploaded\n')
+            # 接收合併後的日誌數據
+            merged_logs = response.json()
+            # 處理合併後的日誌數據...
+        else:
+            print(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},logs_upload_failed')
+            with open('status.log', 'a') as f:
+                f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},logs_upload_failed\n')
+
+    def get_local_ip(self):
+        # 獲取本機電腦的內網IP地址
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))  # 使用 Google 的公共 DNS 服務器
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return ip
+
+
+    def stop(self):
+        self.stop_event.set()
+        self.upload_thread.join()
 
 class PasswordDialog(QDialog):
     def __init__(self, parent=None):
@@ -160,3 +232,7 @@ window = MainWindow()
 window.installEventFilter(window)
 """
 app.exec_()
+uploader = LogUploader()
+# 程序結束時停止上傳線程
+import atexit
+atexit.register(uploader.stop)
