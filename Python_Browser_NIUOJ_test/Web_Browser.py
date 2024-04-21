@@ -16,6 +16,21 @@ class Logger:
         with open(self.filename, 'a') as f:
             f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},{message}\n')
 
+class UploadingMessageBox(QMessageBox):
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setWindowTitle('上傳logs')
+        self.setText('正在上傳考試資料，請勿關閉電腦')
+        self.setStandardButtons(QMessageBox.NoButton)  # 移除所有標準按鈕
+
+    # 重寫 closeEvent 方法來禁止對話框被關閉
+    def closeEvent(self, event):
+        event.ignore()
+        
+    # 添加一個方法來關閉對話框
+    def close_message_box(self):
+        self.close()
+
 class PasswordDialog(QDialog):
     def __init__(self, parent=None):
         super(PasswordDialog, self).__init__(parent)
@@ -168,22 +183,23 @@ class MainWindow(QMainWindow):
             with open('status.log', 'r') as f:
                 line_count = len(f.readlines())
             
-            # 創建請等待對話框對話框
-            QMessageBox.warning(self, '上傳logs', '正在上傳考試資料，請勿關閉電腦')
+            # 創建請等待對話框
+            Uploading_msg_box = UploadingMessageBox()
+            Uploading_msg_box.show()
 
-            # 上傳完成
-            
 
             # 上傳日誌到伺服器
             with open('status.log', 'rb') as f:
                 response = requests.post('http://192.168.6.2:8000/upload', files={'file': f})
                 if response.status_code == 200:
                     self.logger.log('upload_success')
+                    # 上傳完成關閉請等待對話框
+                    Uploading_msg_box.close_message_box()
                     # 上傳成功後關閉電腦
                     try:
                         # Windows 系統重啟命令
-                        #os.system('shutdown /r /t 1')
-                        QMessageBox.warning(self, '測試', '重啟電腦~~')
+                        os.system('shutdown /r /t 1')
+                        #QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
                     except Exception as e:
                         self.logger.log(f'Failed to reboot: {e}')
                         QMessageBox.warning(self, '警告', '無法重啟電腦。')
