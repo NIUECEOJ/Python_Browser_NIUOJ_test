@@ -16,3 +16,5 @@
 - 此程式需要搭配server接收logs
 
 Creator: Jefery
+# 需要改進
+修改update.exe如果本地端有status.log則不要刪除檔案
