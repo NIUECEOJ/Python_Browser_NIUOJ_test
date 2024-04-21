@@ -132,19 +132,28 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(1000, self.start_logging)
     
     def closeEvent(self, event):
-        # 嘗試關閉 update.exe 進程
-        try:
-            self.logger.log('trylogout')
-            # 終止 update.exe 進程
-            subprocess.run(["taskkill", "/f", "/im", "update.exe"], check=True)
-            self.logger.log('update.exe closed')
-        except subprocess.CalledProcessError as e:
-            self.logger.log(f'Failed to close update.exe: {e}')
-            QMessageBox.warning(self, '警告', '無法關閉 update.exe，請手動關閉後再試。')
-            event.ignore()  # 忽略關閉事件，不關閉應用程式
+        # 在關閉視窗前輸出日誌
+        self.logger.log('trylogout')
+
+        # 顯示一個消息框詢問用戶是否確定要重啟電腦
+        reply = QMessageBox.question(self, '確認退出考試？', '您確定要退出考試，將無法重新進入考場？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            self.logger.log('User confirmed reboot')
+            try:
+                # Windows 系統重啟命令
+                os.system('shutdown /r /t 1')
+            except Exception as e:
+                self.logger.log(f'Failed to reboot: {e}')
+                QMessageBox.warning(self, '警告', '無法重啟電腦。')
+                event.ignore()  # 忽略關閉事件，不關閉應用程式
+                return  # 提前返回，不執行下面的關閉代碼
+        else:
+            self.logger.log('User cancelled reboot')
+            event.ignore()  # 用戶選擇不重啟，忽略關閉事件
             return  # 提前返回，不執行下面的關閉代碼
 
-        # 在關閉視窗前輸出日誌
+        # 如果用戶確認重啟，則記錄日誌並關閉應用程式
         self.logger.log('logout')
         super(MainWindow, self).closeEvent(event)  # 繼續執行預設的關閉事件
 
