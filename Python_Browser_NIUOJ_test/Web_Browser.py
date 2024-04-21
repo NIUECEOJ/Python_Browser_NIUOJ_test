@@ -168,23 +168,11 @@ class MainWindow(QMainWindow):
             with open('status.log', 'r') as f:
                 line_count = len(f.readlines())
             
-            # 創建進度條對話框
-            progress_dialog = QProgressDialog("正在上傳日誌...", "取消", 0, line_count, self)
-            progress_dialog.setWindowModality(Qt.WindowModal)
-            progress_dialog.show()
-            
-            # 模擬上傳過程
-            for i in range(line_count):
-                # 更新進度條
-                progress_dialog.setValue(i)
-                if progress_dialog.wasCanceled():
-                    self.logger.log('upload_cancelled')
-                    break
-                # 模擬上傳延遲
-                time.sleep(0.1)
+            # 創建請等待對話框對話框
+            QMessageBox.warning(self, '上傳logs', '正在上傳考試資料，請勿關閉電腦')
 
             # 上傳完成
-            progress_dialog.setValue(line_count)
+            
 
             # 上傳日誌到伺服器
             with open('status.log', 'rb') as f:
@@ -192,17 +180,20 @@ class MainWindow(QMainWindow):
                 if response.status_code == 200:
                     self.logger.log('upload_success')
                     # 上傳成功後關閉電腦
+                    try:
+                        # Windows 系統重啟命令
+                        #os.system('shutdown /r /t 1')
+                        QMessageBox.warning(self, '測試', '重啟電腦~~')
+                    except Exception as e:
+                        self.logger.log(f'Failed to reboot: {e}')
+                        QMessageBox.warning(self, '警告', '無法重啟電腦。')
+                        event.ignore()  # 忽略關閉事件，不關閉應用程式
+                        return  # 提前返回，不執行下面的關閉代碼
                 else:
                     self.logger.log('upload_fail')
-            
-            try:
-                # Windows 系統重啟命令
-                os.system('shutdown /r /t 1')
-            except Exception as e:
-                self.logger.log(f'Failed to reboot: {e}')
-                QMessageBox.warning(self, '警告', '無法重啟電腦。')
-                event.ignore()  # 忽略關閉事件，不關閉應用程式
-                return  # 提前返回，不執行下面的關閉代碼
+                    QMessageBox.warning(self, '警告', '日誌上傳失敗，請檢查網路連接。')
+                    event.ignore()  # 忽略關閉事件，不關閉應用程式
+                    return  # 提前返回，不執行下面的關閉代碼 
         else:
             self.logger.log('User cancelled reboot')
             event.ignore()  # 用戶選擇不重啟，忽略關閉事件
