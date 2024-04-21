@@ -3,8 +3,9 @@ import os
 import time
 from datetime import datetime
 from PyQt5.QtCore import Qt, QUrl, QTimer
-from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton
 from PyQt5.QtWebEngineWidgets import QWebEngineView
+
 
 class PasswordDialog(QDialog):
     def __init__(self, parent=None):
@@ -40,6 +41,9 @@ class PasswordDialog(QDialog):
 
 class MainWindow(QMainWindow):
     def __init__(self):
+        # Add a new attribute to track the password dialog status
+        self.password_dialog_open = False
+        
         super(MainWindow, self).__init__()
         self.left_browser = QWebEngineView()
         self.left_browser.setUrl(QUrl('http://192.168.6.2'))
@@ -60,6 +64,7 @@ class MainWindow(QMainWindow):
                     last_time = datetime.strptime(last_time_str, "%Y.%m.%d.%H.%M.%S")
                     if (datetime.now() - last_time).total_seconds() > 10:
                         dialog = PasswordDialog(self)
+                        self.password_dialog_open = True
                         while dialog.exec_() == QDialog.Accepted:
                             password = dialog.password()
                             if password != 'Jefery':
@@ -68,20 +73,60 @@ class MainWindow(QMainWindow):
                             else:
                                 with open('status.log', 'a') as f:
                                     f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},password_correct\n')
+                                self.password_dialog_open = False
                                 break
-                    else:
-                        with open('status.log', 'a') as f:
-                            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n')
-                else:  # 如果字符串为空,则写入新的时间戳记
-                    with open('status.log', 'a') as f:
-                        f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n')
 
         # Start status logging
         self.start_logging()
+        
+        # Start fullscreen status checking after 5 seconds
+        QTimer.singleShot(5000, self.start_fullscreen_check)
+        
+    def start_fullscreen_check(self):
+        # Check if the application is in fullscreen mode
+        if not self.isFullScreen():
+            with open('status.log', 'a') as f:
+                f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},not_fullscreen\n')
+            # If not, show the password dialog
+            dialog = PasswordDialog(self)
+            self.password_dialog_open = True
+            while dialog.exec_() == QDialog.Accepted:
+                password = dialog.password()
+                if password != 'Jefery':
+                    with open('status.log', 'a') as f:
+                        f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},password_fail\n')
+                else:
+                    with open('status.log', 'a') as f:
+                        f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},password_correct\n')
+                    self.password_dialog_open = False
+                    break
 
+        # Check if there is another window on top of the application
+        if QApplication.activeWindow() != self:
+            with open('status.log', 'a') as f:
+                f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},not_uppest_windows\n')
+            # If so, show the password dialog
+            dialog = PasswordDialog(self)
+            self.password_dialog_open = True
+            while dialog.exec_() == QDialog.Accepted:
+                password = dialog.password()
+                if password != 'Jefery':
+                    with open('status.log', 'a') as f:
+                        f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},password_fail\n')
+                else:
+                    with open('status.log', 'a') as f:
+                        f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},password_correct\n')
+                    self.password_dialog_open = False
+                    break
+
+        # Continue checking every second
+        QTimer.singleShot(1000, self.start_fullscreen_check)
+    
     def start_logging(self):
-        with open('status.log', 'a') as f:
-            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n')
+        # Only log 'online' when the password dialog is not open
+        if not self.password_dialog_open:
+            with open('status.log', 'a') as f:
+                f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n')
         QTimer.singleShot(1000, self.start_logging)
 
 app = QApplication(sys.argv)
