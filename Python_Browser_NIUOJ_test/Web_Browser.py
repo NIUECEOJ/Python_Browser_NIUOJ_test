@@ -6,7 +6,7 @@ import requests
 from PyQt5.QtCore import Qt, QUrl, QTimer
 from PyQt5.QtGui import QMouseEvent, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton, QMessageBox, QWidget, QToolBar
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineView
 
 class Logger:
     def __init__(self, filename):
@@ -37,6 +37,14 @@ class PasswordDialog(QDialog):
     def start_logging(self):
         self.logger.log('entering_password')
         QTimer.singleShot(1000, self.start_logging)
+        
+class WebEngineView(QWebEngineView):
+    def __init__(self, parent=None):
+        super(WebEngineView, self).__init__(parent)
+
+    def contextMenuEvent(self, event):
+        # 不執行任何操作，從而禁用右鍵菜單
+        pass
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -45,10 +53,10 @@ class MainWindow(QMainWindow):
         self.check_fullscreen_topest = True  # 新增一個標誌來控制全螢幕檢查、頂層
         # 初始化退出按鈕
         self.init_exit_button()
-        self.left_browser = QWebEngineView()
+        self.left_browser = WebEngineView()
         self.left_browser.setUrl(QUrl('http://192.168.6.2'))
         self.left_browser.urlChanged.connect(self.log_url_change)
-        self.right_browser = QWebEngineView()
+        self.right_browser = WebEngineView()
         self.right_browser.setUrl(QUrl('http://192.168.6.2/IDE'))
         self.right_browser.urlChanged.connect(self.log_url_change)
         splitter = QSplitter(Qt.Horizontal)
