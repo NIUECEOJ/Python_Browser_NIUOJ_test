@@ -2,7 +2,7 @@ import sys
 import os
 import time
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 from PyQt5.QtCore import Qt, QUrl, QTimer
 from PyQt5.QtGui import QMouseEvent, QKeyEvent
@@ -15,17 +15,21 @@ class Logger:
         self.last_logged_message = None
 
     def log(self, message):
+        timestamp = datetime.now().strftime("%Y.%m.%d.%H.%M.%S")
+        log_entry = f'{timestamp},{message}\n'
         with open(self.filename, 'a') as f:
-            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},{message}\n')
+            f.write(log_entry)
         if message != self.last_logged_message:
             self.last_logged_message = message
             threading.Thread(target=self.upload_log, args=(log_entry,)).start()
             if message == 'online':
                 self.last_online_time = datetime.now()
+                # 啟動一個新線程來定時發送'online'
+                threading.Thread(target=self.send_online_periodically).start()
             else:
                 self.last_online_time = None
-        elif message == 'online' and self.last_online_time:
-            if datetime.now() - self.last_online_time >= timedelta(seconds=10):
+        elif message == 'online':
+            if self.last_online_time and datetime.now() - self.last_online_time >= timedelta(seconds=10):
                 threading.Thread(target=self.send_online_periodically).start()
             
     def upload_log(self, log_entry):
@@ -43,9 +47,10 @@ class Logger:
                 
     def send_online_periodically(self):
         while self.last_logged_message == 'online':
-            log_entry = f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n'
-            self.upload_log(log_entry)
-            time.sleep(5)  # 每五秒執行一次
+            if datetime.now() - self.last_online_time >= timedelta(seconds=10):
+                log_entry = f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n'
+                self.upload_log(log_entry)
+                time.sleep(5)  # 每五秒執行一次
 
 class UploadingMessageBox(QMessageBox):
     def __init__(self, *__args):
@@ -229,8 +234,8 @@ class MainWindow(QMainWindow):
                     # 上傳成功後關閉電腦
                     try:
                         # Windows 系統重啟命令
-                        os.system('shutdown /r /t 1')
-                        #QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
+                        #os.system('shutdown /r /t 1')
+                        QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
                     except Exception as e:
                         self.logger.log(f'Failed to reboot: {e}')
                         QMessageBox.warning(self, '警告', '無法重啟電腦。')
