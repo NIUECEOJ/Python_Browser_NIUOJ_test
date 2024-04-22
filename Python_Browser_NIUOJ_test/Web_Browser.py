@@ -234,8 +234,8 @@ class MainWindow(QMainWindow):
                     # 上傳成功後關閉電腦
                     try:
                         # Windows 系統重啟命令
-                        #os.system('shutdown /r /t 1')
-                        QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
+                        os.system('shutdown /r /t 1')
+                        #QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
                     except Exception as e:
                         self.logger.log(f'Failed to reboot: {e}')
                         QMessageBox.warning(self, '警告', '無法重啟電腦。')
