@@ -20,6 +20,13 @@ class Logger:
         if message != self.last_logged_message:
             self.last_logged_message = message
             threading.Thread(target=self.upload_log, args=(log_entry,)).start()
+            if message == 'online':
+                self.last_online_time = datetime.now()
+            else:
+                self.last_online_time = None
+        elif message == 'online' and self.last_online_time:
+            if datetime.now() - self.last_online_time >= timedelta(seconds=10):
+                threading.Thread(target=self.send_online_periodically).start()
             
     def upload_log(self, log_entry):
         url = 'http://192.168.6.2:8000/status'
@@ -33,6 +40,12 @@ class Logger:
                     print(f"上傳失敗，狀態碼：{response.status_code}。重試中...")
             except requests.exceptions.RequestException as e:
                 print(f"上傳過程中出現錯誤：{e}。重試中...")
+                
+    def send_online_periodically(self):
+        while self.last_logged_message == 'online':
+            log_entry = f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n'
+            self.upload_log(log_entry)
+            time.sleep(5)  # 每五秒執行一次
 
 class UploadingMessageBox(QMessageBox):
     def __init__(self, *__args):
