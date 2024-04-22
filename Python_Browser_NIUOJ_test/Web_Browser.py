@@ -1,7 +1,8 @@
 import sys
 import os
 import time
-from datetime import datetime
+import threading
+from datetime import datetime, timedelta
 import requests
 from PyQt5.QtCore import Qt, QUrl, QTimer
 from PyQt5.QtGui import QMouseEvent, QKeyEvent
@@ -11,10 +12,45 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 class Logger:
     def __init__(self, filename):
         self.filename = filename
+        self.last_logged_message = None
 
     def log(self, message):
+        timestamp = datetime.now().strftime("%Y.%m.%d.%H.%M.%S")
+        log_entry = f'{timestamp},{message}\n'
         with open(self.filename, 'a') as f:
-            f.write(f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},{message}\n')
+            f.write(log_entry)
+        if message != self.last_logged_message:
+            self.last_logged_message = message
+            threading.Thread(target=self.upload_log, args=(log_entry,)).start()
+            if message == 'online':
+                self.last_online_time = datetime.now()
+                # 啟動一個新線程來定時發送'online'
+                threading.Thread(target=self.send_online_periodically).start()
+            else:
+                self.last_online_time = None
+        elif message == 'online':
+            if self.last_online_time and datetime.now() - self.last_online_time >= timedelta(seconds=10):
+                threading.Thread(target=self.send_online_periodically).start()
+            
+    def upload_log(self, log_entry):
+        url = 'http://192.168.6.2:8000/status'
+        while True:
+            try:
+                response = requests.post(url, data=log_entry)
+                if response.status_code == 200:
+                    print("日誌成功上傳。")
+                    break  # 如果狀態碼為200，跳出循環
+                else:
+                    print(f"上傳失敗，狀態碼：{response.status_code}。重試中...")
+            except requests.exceptions.RequestException as e:
+                print(f"上傳過程中出現錯誤：{e}。重試中...")
+                
+    def send_online_periodically(self):
+        while self.last_logged_message == 'online':
+            if datetime.now() - self.last_online_time >= timedelta(seconds=10):
+                log_entry = f'{datetime.now().strftime("%Y.%m.%d.%H.%M.%S")},online\n'
+                self.upload_log(log_entry)
+                time.sleep(5)  # 每五秒執行一次
 
 class UploadingMessageBox(QMessageBox):
     def __init__(self, *__args):
