@@ -18,3 +18,5 @@
 Creator: Jefery
 # 需要改進
 修改update.exe如果本地端有status.log則不要刪除檔案
+加入按下F5重新整理瀏覽器
+滑鼠反白可以複製貼上(不想修啦)
