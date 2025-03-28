@@ -216,7 +216,6 @@ class MainWindow(QMainWindow):
         
         if reply == QMessageBox.Yes:
             self.logger.log('User confirmed reboot')
-            
             # 讀取日誌檔案的行數
             line_count = 0
             with open('status.log', 'r') as f:
@@ -226,7 +225,7 @@ class MainWindow(QMainWindow):
             Uploading_msg_box = UploadingMessageBox()
             Uploading_msg_box.show()
 
-
+            """
             # 上傳日誌到伺服器
             with open('status.log', 'rb') as f:
                 response = requests.post('http://192.168.6.2:8000/upload', files={'file': f})
@@ -248,12 +247,30 @@ class MainWindow(QMainWindow):
                     self.logger.log('upload_fail')
                     QMessageBox.warning(self, '警告', '日誌上傳失敗，請檢查網路連接。')
                     event.ignore()  # 忽略關閉事件，不關閉應用程式
-                    return  # 提前返回，不執行下面的關閉代碼 
+                    return  # 提前返回，不執行下面的關閉代碼        
+        """
+
+            # 新增無上傳log程式
+            self.logger.log('upload_success')
+            # 上傳完成關閉請等待對話框
+            Uploading_msg_box.close_message_box()
+            # 上傳成功後關閉電腦
+            try:
+                # Windows 系統重啟命令
+                os.system('shutdown /r /t 1')
+                #QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
+            except Exception as e:
+                self.logger.log(f'Failed to reboot: {e}')
+                QMessageBox.warning(self, '警告', '無法重啟電腦。')
+                event.ignore()  # 忽略關閉事件，不關閉應用程式
+                return  # 提前返回，不執行下面的關閉代碼
+
         else:
             self.logger.log('User cancelled reboot')
             event.ignore()  # 用戶選擇不重啟，忽略關閉事件
             return  # 提前返回，不執行下面的關閉代碼
 
+        
         # 如果用戶確認重啟，則記錄日誌並關閉應用程式
         self.logger.log('logout')
         super(MainWindow, self).closeEvent(event)  # 繼續執行預設的關閉事件
