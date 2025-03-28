@@ -117,10 +117,10 @@ class MainWindow(QMainWindow):
         # 初始化退出按鈕
         self.init_exit_button()
         self.left_browser = WebEngineView()
-        self.left_browser.setUrl(QUrl('http://192.168.6.2'))
+        self.left_browser.setUrl(QUrl('https://ecejudge.niu.edu.tw'))
         self.left_browser.urlChanged.connect(self.log_url_change)
         self.right_browser = WebEngineView()
-        self.right_browser.setUrl(QUrl('http://192.168.6.2/IDE'))
+        self.right_browser.setUrl(QUrl('https://ecejudge.niu.edu.tw/IDE'))
         self.right_browser.urlChanged.connect(self.log_url_change)
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self.left_browser)
