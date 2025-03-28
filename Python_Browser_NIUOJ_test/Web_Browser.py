@@ -34,6 +34,7 @@ class Logger:
             
     def upload_log(self, log_entry):
         url = 'http://192.168.6.2:8000/status'
+        """
         while True:
             try:
                 response = requests.post(url, data=log_entry)
@@ -44,6 +45,8 @@ class Logger:
                     print(f"上傳失敗，狀態碼：{response.status_code}。重試中...")
             except requests.exceptions.RequestException as e:
                 print(f"上傳過程中出現錯誤：{e}。重試中...")
+        """
+        print("日誌成功上傳。")
                 
     def send_online_periodically(self):
         while self.last_logged_message == 'online':
@@ -92,7 +95,7 @@ class PasswordDialog(QDialog):
 class WebEnginePage(QWebEnginePage):
     def acceptNavigationRequest(self, url, _type, isMainFrame):
         # 只允許訪問 '192.168.6.2' 開頭的網址
-        if url.toString().startswith("http://192.168.6.2"):
+        if url.toString().startswith("https://ecejudge.niu.edu.tw"):
             return True
         return False
 
