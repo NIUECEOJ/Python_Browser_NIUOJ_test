@@ -21,6 +21,7 @@ Creator: Jefery
 一定要禁用esc
 加入程式重開要直接鎖定
 偵測工作管理員啟動要取消
+鎖定網址路徑有status時候禁止顯示
 
 加入使用powertoy看看可不可以直接鎖定Win、Alt、Ctrl、Esc
 加入關閉使用者通知，避免跳出通知導致作弊
