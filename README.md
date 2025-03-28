@@ -18,6 +18,7 @@
 Creator: Jefery
 # 需要改進
 關閉自動關機選項
+一定要禁用esc
 加入使用powertoy看看可不可以直接鎖定Win、Alt、Ctrl、Esc
 加入關閉使用者通知，避免跳出通知導致作弊
 禁用onlinejudge上傳檔案選項
