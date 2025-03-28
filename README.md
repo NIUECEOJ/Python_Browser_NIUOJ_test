@@ -28,6 +28,7 @@ python關閉的時候要重新打開看門狗程式
 禁用onlinejudge上傳檔案選項
 程式被關閉時要刪除源碼
 
+自動安裝python程式
 加入使用powertoy看看可不可以直接鎖定Win、Alt、Ctrl、Esc
 加入關閉使用者通知，避免跳出通知導致作弊
 修改update.exe如果本地端有status.log則不要刪除檔案
