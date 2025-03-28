@@ -95,7 +95,7 @@ class PasswordDialog(QDialog):
 class WebEnginePage(QWebEnginePage):
     def acceptNavigationRequest(self, url, _type, isMainFrame):
         # 只允許訪問 'contest、ide' 開頭的網址
-        if url.toString().startswith(("https://ecejudge.niu.edu.tw/contest/", "https://ecejudge.niu.edu.tw/IDE/")):
+        if url.toString().startswith(("https://ecejudge.niu.edu.tw/contest", "https://ecejudge.niu.edu.tw/IDE")):
             return True
         return False
 
@@ -117,7 +117,7 @@ class MainWindow(QMainWindow):
         # 初始化退出按鈕
         self.init_exit_button()
         self.left_browser = WebEngineView()
-        self.left_browser.setUrl(QUrl('https://ecejudge.niu.edu.tw'))
+        self.left_browser.setUrl(QUrl('https://ecejudge.niu.edu.tw/contest'))
         self.left_browser.urlChanged.connect(self.log_url_change)
         self.right_browser = WebEngineView()
         self.right_browser.setUrl(QUrl('https://ecejudge.niu.edu.tw/IDE'))
