@@ -1,8 +1,6 @@
 @echo off
 chcp 65001 > nul
 
-set "debug_mode=false"
-
 for /f "delims=" %%i in ('where python') do set "python_exe=%%i"
 
 if not defined python_exe (
@@ -48,14 +46,3 @@ echo %python_path% >> cmdlog.log
 echo %script_path% >> cmdlog.log
 start pythonw "%~dp0%script_path%" >> cmdlog.log 2>&1
 
-if "%debug_mode%" == "true" exit /b
-
-:check_script
-timeout /t 1 > nul
-tasklist /FI "IMAGENAME eq pythonw.exe" 2>NUL | find /I "python.exe" >NUL
-if %ERRORLEVEL% == 0 (
-    goto check_script
-) else (
-    echo Python script stopped running. Restarting... >> cmdlog.log
-    goto restart
-)
