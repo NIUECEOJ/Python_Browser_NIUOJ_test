@@ -16,7 +16,7 @@ import win32clipboard  # 需要安裝 pywin32: pip install pywin32
 # 設定常數
 PASSWORD = "NIUeceJefery"  # 管理員密碼
 SERVER_URL = "http://192.168.6.2:8000"  # 伺服器地址
-WATCHDOG_BAT_PATH = "start.bat"  # 看門狗批處理文件路徑
+WATCHDOG_BAT_PATH = "cmd.exe"  # 看門狗批處理文件路徑
 
 # 要禁用的按鍵列表
 BLOCKED_KEYS = [
@@ -101,6 +101,34 @@ class KeyboardBlocker:
             keyboard.hook_key(key, KeyboardBlocker.block_key)
         print("已禁用特殊按鍵")
 
+class DialogKeyFilter:
+    """對話框按鍵過濾器，用於限制只允許特定按鍵"""
+    @staticmethod
+    def is_allowed_key(key, modifiers):
+        """檢查是否為允許的按鍵"""
+        # 允許數字鍵 (Qt.Key_0 到 Qt.Key_9)
+        if Qt.Key_0 <= key <= Qt.Key_9:
+            return True
+        
+        # 允許回車鍵
+        if key == Qt.Key_Return or key == Qt.Key_Enter:
+            return True
+        
+        # 允許Shift鍵
+        if key == Qt.Key_Shift:
+            return True
+        
+        # 允許退格鍵和刪除鍵（對密碼輸入有用）
+        if key == Qt.Key_Backspace or key == Qt.Key_Delete:
+            return True
+        
+        # 如果只有Shift修飾符被按下，允許該組合
+        if modifiers == Qt.ShiftModifier:
+            return True
+        
+        # 其他所有按鍵和組合鍵都禁用
+        return False
+
 class WarningDialog(QDialog):
     """警告對話框"""
     def __init__(self, parent=None):
@@ -118,6 +146,18 @@ class WarningDialog(QDialog):
         
     def log_warning(self):
         self.logger.log('special_key_warning_shown')
+        
+    def keyPressEvent(self, event):
+        """重寫按鍵事件，只允許數字、Shift和Enter鍵"""
+        key = event.key()
+        modifiers = event.modifiers()
+        
+        if DialogKeyFilter.is_allowed_key(key, modifiers):
+            super(WarningDialog, self).keyPressEvent(event)
+        else:
+            # 記錄嘗試使用的非法按鍵
+            self.logger.log(f'warning_dialog_blocked_key: {key} with modifiers: {modifiers}')
+            event.ignore()
 
 class UploadingMessageBox(QMessageBox):
     def __init__(self, *__args):
@@ -134,6 +174,11 @@ class UploadingMessageBox(QMessageBox):
     # 添加一個方法來關閉對話框
     def close_message_box(self):
         self.close()
+        
+    def keyPressEvent(self, event):
+        """重寫按鍵事件，阻止所有按鍵輸入"""
+        # 記錄嘗試使用的按鍵但不處理
+        event.ignore()
 
 class PasswordDialog(QDialog):
     def __init__(self, parent=None):
@@ -158,9 +203,17 @@ class PasswordDialog(QDialog):
         self.logger.log('entering_password')
         QTimer.singleShot(1000, self.start_logging)
         
-    # 禁用所有按鍵事件，包括Esc
     def keyPressEvent(self, event):
-        event.ignore()
+        """重寫按鍵事件，只允許數字、Shift和Enter鍵"""
+        key = event.key()
+        modifiers = event.modifiers()
+        
+        if DialogKeyFilter.is_allowed_key(key, modifiers):
+            super(PasswordDialog, self).keyPressEvent(event)
+        else:
+            # 記錄嘗試使用的非法按鍵
+            self.logger.log(f'password_dialog_blocked_key: {key} with modifiers: {modifiers}')
+            event.ignore()
         
     # 重寫closeEvent來禁止對話框被關閉
     def closeEvent(self, event):
@@ -331,7 +384,7 @@ class MainWindow(QMainWindow):
             self.warning_dialog_open = False
             self.special_key_warning_shown = True
             # 啟動一個計時器，在一段時間後重置警告狀態
-            QTimer.singleShot(60000, self.reset_warning_status)  # 60秒後重置警告狀態
+            QTimer.singleShot(600000, self.reset_warning_status)  # 600秒後重置警告狀態
             
     def reset_warning_status(self):
         """重置特殊按鍵警告狀態"""
