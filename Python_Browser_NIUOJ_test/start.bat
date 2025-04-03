@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
 
-set "debug_mode=true"
+set "debug_mode=false"
 
 for /f "delims=" %%i in ('where python') do set "python_exe=%%i"
 
