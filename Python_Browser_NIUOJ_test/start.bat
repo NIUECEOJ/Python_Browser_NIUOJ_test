@@ -17,6 +17,7 @@ python -m pip install --upgrade pip
 python -m pip install PyQt5
 python -m pip install PyQtWebEngine
 python -m pip install requests
+python -m pip install psutil
 
 :restart
 echo Running Python script with admin privileges...
