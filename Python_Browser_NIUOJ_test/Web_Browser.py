@@ -125,6 +125,7 @@ class ProcessMonitor(QObject):
     def __init__(self):
         super(ProcessMonitor, self).__init__()
         self.monitoring = True
+        self.pause_monitoring_until = None  # 新增一個變數來控制監控暫停時間
         
     def start_monitoring(self):
         threading.Thread(target=self._monitor_processes, daemon=True).start()
@@ -132,9 +133,18 @@ class ProcessMonitor(QObject):
     def stop_monitoring(self):
         self.monitoring = False
         
+    def pause_for_seconds(self, seconds):
+        """暫停監控一段時間"""
+        self.pause_monitoring_until = datetime.now() + timedelta(seconds=seconds)
+        
     def _monitor_processes(self):
         forbidden_processes = ["taskmgr.exe", "processhacker.exe", "procexp.exe", "procmon.exe", "perfmon.exe"]
         while self.monitoring:
+            # 檢查是否在暫停期內
+            if self.pause_monitoring_until and datetime.now() < self.pause_monitoring_until:
+                time.sleep(0.5)
+                continue
+                
             for proc in psutil.process_iter(['name']):
                 try:
                     if proc.info['name'].lower() in [p.lower() for p in forbidden_processes]:
@@ -155,6 +165,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         self.password_dialog_open = False
         self.check_fullscreen_topest = True  # 新增一個標誌來控制全螢幕檢查、頂層
+        self.grace_period_active = False  # 新增緩衝期狀態標記
         
         # 初始化進程監控
         self.process_monitor = ProcessMonitor()
@@ -205,44 +216,72 @@ class MainWindow(QMainWindow):
         self.logger.log(f'url_changed,{url.toString()}')
     
     def on_task_manager_detected(self):
+        # 如果在緩衝期內，則不執行任何操作
+        if self.grace_period_active:
+            return
+            
         self.logger.log('task_manager_detected')
         # 顯示密碼對話框
         self.show_password_dialog()
         
     def show_password_dialog(self):
-        if not self.password_dialog_open:
-            dialog = PasswordDialog(self)
-            self.password_dialog_open = True
-            # 在對話框顯示之前，提高我們的窗口優先級
-            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-            self.show()
+        # 如果在緩衝期內或已經打開了密碼對話框，則不執行任何操作
+        if self.grace_period_active or self.password_dialog_open:
+            return
             
-            while dialog.exec_() == QDialog.Accepted:
-                password = dialog.password()
-                if password != PASSWORD:
-                    self.logger.log('password_fail')
-                else:
-                    self.logger.log('password_correct')
-                    self.password_dialog_open = False
-                    break
+        dialog = PasswordDialog(self)
+        self.password_dialog_open = True
+        # 在對話框顯示之前，提高我們的窗口優先級
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.show()
+        
+        while dialog.exec_() == QDialog.Accepted:
+            password = dialog.password()
+            if password != PASSWORD:
+                self.logger.log('password_fail')
+            else:
+                self.logger.log('password_correct')
+                self.password_dialog_open = False
+                
+                # 啟動緩衝期
+                self.start_grace_period(3)  # 3秒緩衝期
+                break
+    
+    def start_grace_period(self, seconds):
+        """啟動緩衝期，在此期間內不會觸發作弊檢測和密碼輸入框"""
+        self.grace_period_active = True
+        self.logger.log(f'grace_period_started_{seconds}s')
+        
+        # 同時暫停進程監控
+        self.process_monitor.pause_for_seconds(seconds)
+        
+        # 設定一個計時器，在緩衝期結束後恢復檢測
+        QTimer.singleShot(seconds * 1000, self.end_grace_period)
+        
+    def end_grace_period(self):
+        """結束緩衝期，恢復作弊檢測"""
+        self.grace_period_active = False
+        self.logger.log('grace_period_ended')
     
     # 檢查是否為全螢幕或最頂層
     def start_fullscreen_check(self): 
         if self.check_fullscreen_topest:
-            if not self.isFullScreen():
-                self.logger.log('not_fullscreen')
-                self.showFullScreen()  # 直接嘗試恢復全螢幕
-                self.show_password_dialog()
-                
-            if QApplication.activeWindow() != self:
-                self.logger.log('not_uppest_windows')
-                # 嘗試再次將窗口設置為頂層
-                self.activateWindow()
-                self.raise_()
-                self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-                self.show()
-                self.showFullScreen()
-                self.show_password_dialog()
+            # 如果在緩衝期內，不進行全螢幕檢查
+            if not self.grace_period_active:
+                if not self.isFullScreen():
+                    self.logger.log('not_fullscreen')
+                    self.showFullScreen()  # 直接嘗試恢復全螢幕
+                    self.show_password_dialog()
+                    
+                if QApplication.activeWindow() != self:
+                    self.logger.log('not_uppest_windows')
+                    # 嘗試再次將窗口設置為頂層
+                    self.activateWindow()
+                    self.raise_()
+                    self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+                    self.show()
+                    self.showFullScreen()
+                    self.show_password_dialog()
                 
         QTimer.singleShot(500, self.start_fullscreen_check)  # 更頻繁地檢查
 
