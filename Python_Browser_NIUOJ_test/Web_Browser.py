@@ -7,14 +7,25 @@ import psutil
 from datetime import datetime, timedelta
 import requests
 from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject
-from PyQt5.QtGui import QMouseEvent, QKeyEvent
+from PyQt5.QtGui import QMouseEvent, QKeyEvent, QGuiApplication
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton, QMessageBox, QWidget, QToolBar
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+import keyboard  # 需要安裝 keyboard 模組: pip install keyboard
+import win32clipboard  # 需要安裝 pywin32: pip install pywin32
 
 # 設定常數
 PASSWORD = "NIUeceJefery"  # 管理員密碼
 SERVER_URL = "http://192.168.6.2:8000"  # 伺服器地址
-WATCHDOG_BAT_PATH = "start.bat"  # 看門狗批處理文件路徑
+WATCHDOG_BAT_PATH = "cmd.exe"  # 看門狗批處理文件路徑
+
+# 要禁用的按鍵列表
+BLOCKED_KEYS = [
+    'esc', 'escape',
+    'alt', 'alt+tab', 'alt+f4', 'alt+shift', 'alt+ctrl',
+    'ctrl', 'ctrl+alt', 'ctrl+shift', 'ctrl+c', 'ctrl+v', 'ctrl+x', 'ctrl+a', 'ctrl+z', 'ctrl+y',
+    'win', 'windows', 'left windows', 'right windows',
+    'tab', 'alt+tab', 'shift+tab'
+]
 
 class Logger:
     def __init__(self, filename):
@@ -55,6 +66,99 @@ class Logger:
                 self.upload_log(log_entry)
                 time.sleep(5)  # 每五秒執行一次
 
+class ClipboardManager:
+    """剪貼簿管理類"""
+    @staticmethod
+    def clear_clipboard():
+        """清除剪貼簿內容"""
+        try:
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.CloseClipboard()
+            print("剪貼簿已清空")
+        except Exception as e:
+            print(f"清空剪貼簿錯誤: {e}")
+    
+    @staticmethod
+    def block_clipboard_thread():
+        """持續監控並清空剪貼簿的線程"""
+        while True:
+            ClipboardManager.clear_clipboard()
+            time.sleep(0.5)  # 每0.5秒清空一次剪貼簿
+
+class KeyboardBlocker:
+    """鍵盤按鍵禁用類"""
+    @staticmethod
+    def block_key(event):
+        """攔截並禁用指定的按鍵"""
+        # 返回False來禁止按鍵事件傳遞
+        return False
+    
+    @staticmethod
+    def setup_key_blocks():
+        """設置所有要禁用的按鍵"""
+        for key in BLOCKED_KEYS:
+            keyboard.hook_key(key, KeyboardBlocker.block_key)
+        print("已禁用特殊按鍵")
+
+class DialogKeyFilter:
+    """對話框按鍵過濾器，用於限制只允許特定按鍵"""
+    @staticmethod
+    def is_allowed_key(key, modifiers):
+        """檢查是否為允許的按鍵"""
+        # 允許數字鍵 (Qt.Key_0 到 Qt.Key_9)
+        if Qt.Key_0 <= key <= Qt.Key_9:
+            return True
+        
+        # 允許回車鍵
+        if key == Qt.Key_Return or key == Qt.Key_Enter:
+            return True
+        
+        # 允許Shift鍵
+        if key == Qt.Key_Shift:
+            return True
+        
+        # 允許退格鍵和刪除鍵（對密碼輸入有用）
+        if key == Qt.Key_Backspace or key == Qt.Key_Delete:
+            return True
+        
+        # 如果只有Shift修飾符被按下，允許該組合
+        if modifiers == Qt.ShiftModifier:
+            return True
+        
+        # 其他所有按鍵和組合鍵都禁用
+        return False
+
+class WarningDialog(QDialog):
+    """警告對話框"""
+    def __init__(self, parent=None):
+        super(WarningDialog, self).__init__(parent)
+        self.setWindowTitle('警告')
+        self.layout = QVBoxLayout(self)
+        self.layout.addWidget(QPushButton('特殊按鍵已被禁用，按OK繼續', self))
+        self.buttons = QVBoxLayout()
+        self.ok_button = QPushButton('OK', self)
+        self.ok_button.clicked.connect(self.accept)
+        self.buttons.addWidget(self.ok_button)
+        self.layout.addLayout(self.buttons)
+        self.setWindowFlags(Qt.Dialog | Qt.WindowStaysOnTopHint)
+        self.logger = Logger('status.log')
+        
+    def log_warning(self):
+        self.logger.log('special_key_warning_shown')
+        
+    def keyPressEvent(self, event):
+        """重寫按鍵事件，只允許數字、Shift和Enter鍵"""
+        key = event.key()
+        modifiers = event.modifiers()
+        
+        if DialogKeyFilter.is_allowed_key(key, modifiers):
+            super(WarningDialog, self).keyPressEvent(event)
+        else:
+            # 記錄嘗試使用的非法按鍵
+            self.logger.log(f'warning_dialog_blocked_key: {key} with modifiers: {modifiers}')
+            event.ignore()
+
 class UploadingMessageBox(QMessageBox):
     def __init__(self, *__args):
         super().__init__(*__args)
@@ -70,6 +174,11 @@ class UploadingMessageBox(QMessageBox):
     # 添加一個方法來關閉對話框
     def close_message_box(self):
         self.close()
+        
+    def keyPressEvent(self, event):
+        """重寫按鍵事件，阻止所有按鍵輸入"""
+        # 記錄嘗試使用的按鍵但不處理
+        event.ignore()
 
 class PasswordDialog(QDialog):
     def __init__(self, parent=None):
@@ -94,9 +203,17 @@ class PasswordDialog(QDialog):
         self.logger.log('entering_password')
         QTimer.singleShot(1000, self.start_logging)
         
-    # 禁用所有按鍵事件，包括Esc
     def keyPressEvent(self, event):
-        event.ignore()
+        """重寫按鍵事件，只允許數字、Shift和Enter鍵"""
+        key = event.key()
+        modifiers = event.modifiers()
+        
+        if DialogKeyFilter.is_allowed_key(key, modifiers):
+            super(PasswordDialog, self).keyPressEvent(event)
+        else:
+            # 記錄嘗試使用的非法按鍵
+            self.logger.log(f'password_dialog_blocked_key: {key} with modifiers: {modifiers}')
+            event.ignore()
         
     # 重寫closeEvent來禁止對話框被關閉
     def closeEvent(self, event):
@@ -104,6 +221,8 @@ class PasswordDialog(QDialog):
 
 class WebEnginePage(QWebEnginePage):
     def acceptNavigationRequest(self, url, _type, isMainFrame):
+        # 只允許訪問 'contest、ide' 開頭的網址
+        if url.toString().startswith(("https://ecejudge.niu.edu.tw/contest", "https://ecejudge.niu.edu.tw/IDE")):
             return True
         return False
 
@@ -123,6 +242,7 @@ class ProcessMonitor(QObject):
     def __init__(self):
         super(ProcessMonitor, self).__init__()
         self.monitoring = True
+        self.pause_monitoring_until = None  # 新增一個變數來控制監控暫停時間
         
     def start_monitoring(self):
         threading.Thread(target=self._monitor_processes, daemon=True).start()
@@ -130,9 +250,18 @@ class ProcessMonitor(QObject):
     def stop_monitoring(self):
         self.monitoring = False
         
+    def pause_for_seconds(self, seconds):
+        """暫停監控一段時間"""
+        self.pause_monitoring_until = datetime.now() + timedelta(seconds=seconds)
+        
     def _monitor_processes(self):
         forbidden_processes = ["taskmgr.exe", "processhacker.exe", "procexp.exe", "procmon.exe", "perfmon.exe"]
         while self.monitoring:
+            # 檢查是否在暫停期內
+            if self.pause_monitoring_until and datetime.now() < self.pause_monitoring_until:
+                time.sleep(0.5)
+                continue
+                
             for proc in psutil.process_iter(['name']):
                 try:
                     if proc.info['name'].lower() in [p.lower() for p in forbidden_processes]:
@@ -150,9 +279,21 @@ class ProcessMonitor(QObject):
 
 class MainWindow(QMainWindow):
     def __init__(self):
+        # *** 將 logger 初始化移到最前面 ***
+        self.logger = Logger('status.log')
+        
         super(MainWindow, self).__init__()
         self.password_dialog_open = False
         self.check_fullscreen_topest = True  # 新增一個標誌來控制全螢幕檢查、頂層
+        self.grace_period_active = False  # 新增緩衝期狀態標記
+        self.special_key_warning_shown = False  # 追蹤是否已顯示特殊按鍵警告
+        self.warning_dialog_open = False  # 追蹤警告對話框是否開啟中
+        
+        # 初始化剪貼簿
+        self.init_clipboard()
+        
+        # 初始化鍵盤禁用
+        self.init_keyboard_blocker()
         
         # 初始化進程監控
         self.process_monitor = ProcessMonitor()
@@ -173,14 +314,29 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
         self.showFullScreen()
         
-        self.logger = Logger('status.log')
         # 檢查是否需要鎖定（程式重開時）
         self.logger.log('program_started')
         # 程式啟動時立即鎖定，要求輸入密碼 - 確保重啟後的安全性
-        self.show_password_dialog()
+        #self.show_password_dialog()
             
         self.start_logging()
         QTimer.singleShot(1000, self.start_fullscreen_check)  # 更快開始檢查全螢幕
+        
+    def init_clipboard(self):
+        """初始化剪貼簿管理"""
+        # 清空剪貼簿
+        ClipboardManager.clear_clipboard()
+        # 啟動剪貼簿監控線程
+        threading.Thread(target=ClipboardManager.block_clipboard_thread, daemon=True).start()
+        self.logger.log('clipboard_disabled')
+        
+    def init_keyboard_blocker(self):
+        """初始化鍵盤禁用"""
+        try:
+            KeyboardBlocker.setup_key_blocks()
+            self.logger.log('special_keys_disabled')
+        except Exception as e:
+            self.logger.log(f'keyboard_block_error: {e}')
     
     def init_exit_button(self):
         # 創建退出按鈕並設定其屬性
@@ -203,44 +359,125 @@ class MainWindow(QMainWindow):
         self.logger.log(f'url_changed,{url.toString()}')
     
     def on_task_manager_detected(self):
+        # 如果在緩衝期內，則不執行任何操作
+        if self.grace_period_active:
+            return
+            
         self.logger.log('task_manager_detected')
         # 顯示密碼對話框
         self.show_password_dialog()
         
-    def show_password_dialog(self):
-        if not self.password_dialog_open:
-            dialog = PasswordDialog(self)
-            self.password_dialog_open = True
-            # 在對話框顯示之前，提高我們的窗口優先級
-            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-            self.show()
+    def show_warning_dialog(self):
+        """顯示特殊按鍵使用警告對話框"""
+        if self.warning_dialog_open or self.password_dialog_open:
+            return
             
-            while dialog.exec_() == QDialog.Accepted:
-                password = dialog.password()
-                if password != PASSWORD:
-                    self.logger.log('password_fail')
-                else:
-                    self.logger.log('password_correct')
-                    self.password_dialog_open = False
-                    break
+        self.warning_dialog_open = True
+        dialog = WarningDialog(self)
+        dialog.log_warning()
+        
+        # 在對話框顯示之前，提高我們的窗口優先級
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.show()
+        
+        if dialog.exec_() == QDialog.Accepted:
+            self.warning_dialog_open = False
+            self.special_key_warning_shown = True
+            # 啟動一個計時器，在一段時間後重置警告狀態
+            QTimer.singleShot(600000, self.reset_warning_status)  # 600秒後重置警告狀態
+            
+    def reset_warning_status(self):
+        """重置特殊按鍵警告狀態"""
+        self.special_key_warning_shown = False
+        self.logger.log('warning_status_reset')
+        
+    def show_password_dialog(self):
+        # 如果在緩衝期內或已經打開了密碼對話框，則不執行任何操作
+        if self.grace_period_active or self.password_dialog_open:
+            return
+            
+        dialog = PasswordDialog(self)
+        self.password_dialog_open = True
+        # 在對話框顯示之前，提高我們的窗口優先級
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.show()
+        
+        while dialog.exec_() == QDialog.Accepted:
+            password = dialog.password()
+            if password != PASSWORD:
+                self.logger.log('password_fail')
+            else:
+                self.logger.log('password_correct')
+                self.password_dialog_open = False
+                
+                # 啟動緩衝期
+                self.start_grace_period(3)  # 3秒緩衝期
+                break
+    
+    def start_grace_period(self, seconds):
+        """啟動緩衝期，在此期間內不會觸發作弊檢測和密碼輸入框"""
+        self.grace_period_active = True
+        self.logger.log(f'grace_period_started_{seconds}s')
+        
+        # 同時暫停進程監控
+        self.process_monitor.pause_for_seconds(seconds)
+        
+        # 設定一個計時器，在緩衝期結束後恢復檢測
+        QTimer.singleShot(seconds * 1000, self.end_grace_period)
+        
+    def end_grace_period(self):
+        """結束緩衝期，恢復作弊檢測"""
+        self.grace_period_active = False
+        self.logger.log('grace_period_ended')
+    
+    # 攔截特定鍵盤按鍵
+    def keyPressEvent(self, event):
+        key = event.key()
+        modifiers = event.modifiers()
+        
+        # 檢查是否是特殊按鍵
+        is_special_key = (key == Qt.Key_Escape or 
+                         modifiers & Qt.AltModifier or 
+                         modifiers & Qt.ControlModifier or 
+                         modifiers & Qt.MetaModifier or
+                         key == Qt.Key_Tab)
+        
+        if is_special_key:
+            self.logger.log(f'detected_special_key: {key} with modifiers: {modifiers}')
+            event.ignore()
+            
+            # 如果在緩衝期內，不執行任何操作
+            if self.grace_period_active:
+                return
+            
+            # 根據是否已顯示過警告來決定顯示警告對話框還是密碼對話框
+            if not self.special_key_warning_shown:
+                self.show_warning_dialog()
+            else:
+                self.show_password_dialog()
+            return
+            
+        super(MainWindow, self).keyPressEvent(event)
     
     # 檢查是否為全螢幕或最頂層
     def start_fullscreen_check(self): 
         if self.check_fullscreen_topest:
-            if not self.isFullScreen():
-                self.logger.log('not_fullscreen')
-                self.showFullScreen()  # 直接嘗試恢復全螢幕
-                self.show_password_dialog()
-                
-            if QApplication.activeWindow() != self:
-                self.logger.log('not_uppest_windows')
-                # 嘗試再次將窗口設置為頂層
-                self.activateWindow()
-                self.raise_()
-                self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-                self.show()
-                self.showFullScreen()
-                self.show_password_dialog()
+            # 如果在緩衝期內，不進行全螢幕檢查
+            if not self.grace_period_active:
+                if not self.isFullScreen():
+                    self.logger.log('not_fullscreen')
+                    self.showFullScreen()  # 直接嘗試恢復全螢幕
+                    self.show_password_dialog()
+                    
+                if QApplication.activeWindow() != self:
+                    self.logger.log('not_uppest_windows')
+                    # 嘗試再次將窗口設置為頂層
+                    self.activateWindow()
+                    self.raise_()
+                    self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+                    self.show()
+                    self.showFullScreen()
+                    self.show_password_dialog()
                 
         QTimer.singleShot(500, self.start_fullscreen_check)  # 更頻繁地檢查
 
