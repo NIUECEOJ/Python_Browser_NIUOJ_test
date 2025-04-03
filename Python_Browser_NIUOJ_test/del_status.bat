@@ -1,6 +1,9 @@
 @echo off
 chcp 65001 > nul
 
+del /F /Q .\status.log 2>nul || (echo error someone using files & exit /b)
+del /F /Q .\cmdlog.log 2>nul || (echo error someone using files & exit /b)
+
 :: Check if we already have admin privileges
 >nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
 
@@ -21,5 +24,6 @@ exit /b
 
 :del_status.log
 del /F /Q C:\Windows\System32\status.log 2>nul || (echo error someone using files & exit /b)
-del /F /Q .\status.log 2>nul || (echo error someone using files & exit /b)
+del /F /Q C:\Windows\System32\cmdlog.log 2>nul || (echo error someone using files & exit /b)
+
 
