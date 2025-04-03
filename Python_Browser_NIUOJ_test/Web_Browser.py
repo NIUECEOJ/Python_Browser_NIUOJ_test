@@ -98,8 +98,27 @@ class KeyboardBlocker:
     def setup_key_blocks():
         """設置所有要禁用的按鍵"""
         for key in BLOCKED_KEYS:
-            keyboard.hook_key(key, KeyboardBlocker.block_key)
+            try:
+                keyboard.hook_key(key, KeyboardBlocker.block_key)
+            except Exception as e:
+                print(f"無法禁用按鍵 {key}: {e}")
+        
+        # 增強：直接攔截組合鍵
+        keyboard.hook(KeyboardBlocker.enhanced_key_block)
         print("已禁用特殊按鍵")
+    
+    @staticmethod
+    def enhanced_key_block(event):
+        """進階按鍵阻擋函數"""
+        # 如果是按下事件
+        if event.event_type == keyboard.KEY_DOWN:
+            # 檢查是否含有特殊功能鍵
+            if (event.modifiers or 
+                event.name.lower() in ['win', 'windows', 'left windows', 'right windows', 
+                                      'esc', 'escape', 'tab', 
+                                      'alt', 'ctrl', 'control']):
+                return False  # 阻擋事件繼續傳遞
+        return True  # 允許其他按鍵
 
 class DialogKeyFilter:
     """對話框按鍵過濾器，用於限制只允許特定按鍵"""
@@ -110,19 +129,23 @@ class DialogKeyFilter:
         if Qt.Key_0 <= key <= Qt.Key_9:
             return True
         
-        # 允許回車鍵
-        if key == Qt.Key_Return or key == Qt.Key_Enter:
+        # 允許字母鍵 (Qt.Key_A 到 Qt.Key_Z)
+        if Qt.Key_A <= key <= Qt.Key_Z:
             return True
         
-        # 允許Shift鍵
-        if key == Qt.Key_Shift:
+        # 允許回車鍵
+        if key == Qt.Key_Return or key == Qt.Key_Enter:
             return True
         
         # 允許退格鍵和刪除鍵（對密碼輸入有用）
         if key == Qt.Key_Backspace or key == Qt.Key_Delete:
             return True
         
-        # 如果只有Shift修飾符被按下，允許該組合
+        # # 如果沒有修飾符被按下，允許基本按鍵
+        # if modifiers == Qt.NoModifier:
+            # return True
+        
+        # 如果只有Shift修飾符被按下，允許該組合（用於大寫）
         if modifiers == Qt.ShiftModifier:
             return True
         
@@ -141,14 +164,22 @@ class WarningDialog(QDialog):
         self.ok_button.clicked.connect(self.accept)
         self.buttons.addWidget(self.ok_button)
         self.layout.addLayout(self.buttons)
-        self.setWindowFlags(Qt.Dialog | Qt.WindowStaysOnTopHint)
+        # 確保對話框始終位於頂層
+        self.setWindowFlags(Qt.Dialog | Qt.WindowStaysOnTopHint | Qt.X11BypassWindowManagerHint)
         self.logger = Logger('status.log')
         
     def log_warning(self):
         self.logger.log('special_key_warning_shown')
         
+    def showEvent(self, event):
+        """重寫顯示事件，確保對話框顯示時主視窗仍然保持全螢幕"""
+        super(WarningDialog, self).showEvent(event)
+        # 確保對話框在頂層
+        self.activateWindow()
+        self.raise_()
+        
     def keyPressEvent(self, event):
-        """重寫按鍵事件，只允許數字、Shift和Enter鍵"""
+        """重寫按鍵事件，只允許數字、字母、Shift和Enter鍵"""
         key = event.key()
         modifiers = event.modifiers()
         
@@ -165,7 +196,8 @@ class UploadingMessageBox(QMessageBox):
         self.setWindowTitle('上傳logs')
         self.setText('正在上傳考試資料，請勿關閉電腦')
         self.setStandardButtons(QMessageBox.NoButton)  # 移除所有標準按鈕
-        self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)  # 禁用關閉按鈕
+        # 確保訊息框在頂層
+        self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowStaysOnTopHint)
 
     # 重寫 closeEvent 方法來禁止對話框被關閉
     def closeEvent(self, event):
@@ -191,8 +223,9 @@ class PasswordDialog(QDialog):
         self.ok_button = QPushButton('OK', self)
         self.ok_button.clicked.connect(self.accept)
         self.layout.addWidget(self.ok_button)
-        # 設置窗口標誌，禁用所有關閉選項
-        self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+        # 設置窗口標誌，確保在頂層且無法關閉
+        self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint | 
+                           Qt.WindowStaysOnTopHint | Qt.X11BypassWindowManagerHint)
         self.logger = Logger('status.log')
         self.start_logging()
         
@@ -203,8 +236,15 @@ class PasswordDialog(QDialog):
         self.logger.log('entering_password')
         QTimer.singleShot(1000, self.start_logging)
         
+    def showEvent(self, event):
+        """重寫顯示事件，確保對話框顯示時主視窗仍然保持全螢幕"""
+        super(PasswordDialog, self).showEvent(event)
+        # 確保對話框在頂層
+        self.activateWindow()
+        self.raise_()
+        
     def keyPressEvent(self, event):
-        """重寫按鍵事件，只允許數字、Shift和Enter鍵"""
+        """重寫按鍵事件，只允許數字、字母、Shift和Enter鍵"""
         key = event.key()
         modifiers = event.modifiers()
         
@@ -312,6 +352,9 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.left_browser)
         splitter.addWidget(self.right_browser)
         self.setCentralWidget(splitter)
+        
+        # 設定窗口屬性
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint | Qt.X11BypassWindowManagerHint)
         self.showFullScreen()
         
         # 檢查是否需要鎖定（程式重開時）
@@ -320,7 +363,7 @@ class MainWindow(QMainWindow):
         #self.show_password_dialog()
             
         self.start_logging()
-        QTimer.singleShot(1000, self.start_fullscreen_check)  # 更快開始檢查全螢幕
+        QTimer.singleShot(500, self.start_fullscreen_check)  # 更快開始檢查全螢幕
         
     def init_clipboard(self):
         """初始化剪貼簿管理"""
@@ -376,15 +419,17 @@ class MainWindow(QMainWindow):
         dialog = WarningDialog(self)
         dialog.log_warning()
         
-        # 在對話框顯示之前，提高我們的窗口優先級
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-        self.show()
+        # 在對話框顯示前確保主視窗是全螢幕並且在最上層
+        self.ensure_fullscreen_and_top()
         
         if dialog.exec_() == QDialog.Accepted:
             self.warning_dialog_open = False
             self.special_key_warning_shown = True
             # 啟動一個計時器，在一段時間後重置警告狀態
             QTimer.singleShot(600000, self.reset_warning_status)  # 600秒後重置警告狀態
+            
+            # 確保對話框關閉後主視窗仍然是全螢幕和最上層
+            self.ensure_fullscreen_and_top()
             
     def reset_warning_status(self):
         """重置特殊按鍵警告狀態"""
@@ -395,12 +440,12 @@ class MainWindow(QMainWindow):
         # 如果在緩衝期內或已經打開了密碼對話框，則不執行任何操作
         if self.grace_period_active or self.password_dialog_open:
             return
+        
+        # 在顯示密碼對話框前確保主視窗是全螢幕並且在最上層
+        self.ensure_fullscreen_and_top()
             
         dialog = PasswordDialog(self)
         self.password_dialog_open = True
-        # 在對話框顯示之前，提高我們的窗口優先級
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-        self.show()
         
         while dialog.exec_() == QDialog.Accepted:
             password = dialog.password()
@@ -412,7 +457,18 @@ class MainWindow(QMainWindow):
                 
                 # 啟動緩衝期
                 self.start_grace_period(3)  # 3秒緩衝期
+                
+                # 確保對話框關閉後主視窗仍然是全螢幕和最上層
+                self.ensure_fullscreen_and_top()
                 break
+    
+    def ensure_fullscreen_and_top(self):
+        """確保視窗是全螢幕且在最上層"""
+        self.setWindowState(self.windowState() | Qt.WindowFullScreen)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint | Qt.X11BypassWindowManagerHint)
+        self.showFullScreen()
+        self.activateWindow()
+        self.raise_()
     
     def start_grace_period(self, seconds):
         """啟動緩衝期，在此期間內不會觸發作弊檢測和密碼輸入框"""
@@ -454,7 +510,8 @@ class MainWindow(QMainWindow):
             if not self.special_key_warning_shown:
                 self.show_warning_dialog()
             else:
-                self.show_password_dialog()
+                # 修正：如果已顯示過警告，只顯示警告對話框，不顯示密碼對話框
+                self.show_warning_dialog()
             return
             
         super(MainWindow, self).keyPressEvent(event)
@@ -463,20 +520,15 @@ class MainWindow(QMainWindow):
     def start_fullscreen_check(self): 
         if self.check_fullscreen_topest:
             # 如果在緩衝期內，不進行全螢幕檢查
-            if not self.grace_period_active:
+            if not self.grace_period_active and not self.password_dialog_open and not self.warning_dialog_open:
                 if not self.isFullScreen():
                     self.logger.log('not_fullscreen')
-                    self.showFullScreen()  # 直接嘗試恢復全螢幕
+                    self.ensure_fullscreen_and_top()
                     self.show_password_dialog()
                     
                 if QApplication.activeWindow() != self:
                     self.logger.log('not_uppest_windows')
-                    # 嘗試再次將窗口設置為頂層
-                    self.activateWindow()
-                    self.raise_()
-                    self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-                    self.show()
-                    self.showFullScreen()
+                    self.ensure_fullscreen_and_top()
                     self.show_password_dialog()
                 
         QTimer.singleShot(500, self.start_fullscreen_check)  # 更頻繁地檢查
