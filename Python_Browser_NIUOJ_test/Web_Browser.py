@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
         # 檢查是否需要鎖定（程式重開時）
         self.logger.log('program_started')
         # 程式啟動時立即鎖定，要求輸入密碼 - 確保重啟後的安全性
-        self.show_password_dialog()
+        #self.show_password_dialog()
             
         self.start_logging()
         QTimer.singleShot(1000, self.start_fullscreen_check)  # 更快開始檢查全螢幕
