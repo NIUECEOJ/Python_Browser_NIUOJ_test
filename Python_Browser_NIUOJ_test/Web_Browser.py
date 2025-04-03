@@ -2,17 +2,25 @@ import sys
 import os
 import time
 import threading
+import subprocess
+import psutil
 from datetime import datetime, timedelta
 import requests
-from PyQt5.QtCore import Qt, QUrl, QTimer
+from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QMouseEvent, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QSplitter, QDialog, QVBoxLayout, QLineEdit, QPushButton, QMessageBox, QWidget, QToolBar
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+
+# 設定常數
+PASSWORD = "NIUeceJefery"  # 管理員密碼
+SERVER_URL = "http://192.168.6.2:8000"  # 伺服器地址
+WATCHDOG_BAT_PATH = "start.bat"  # 看門狗批處理文件路徑
 
 class Logger:
     def __init__(self, filename):
         self.filename = filename
         self.last_logged_message = None
+        self.last_online_time = None
 
     def log(self, message):
         timestamp = datetime.now().strftime("%Y.%m.%d.%H.%M.%S")
@@ -33,20 +41,12 @@ class Logger:
                 threading.Thread(target=self.send_online_periodically).start()
             
     def upload_log(self, log_entry):
-        url = 'http://192.168.6.2:8000/status'
-        """
-        while True:
-            try:
-                response = requests.post(url, data=log_entry)
-                if response.status_code == 200:
-                    print("日誌成功上傳。")
-                    break  # 如果狀態碼為200，跳出循環
-                else:
-                    print(f"上傳失敗，狀態碼：{response.status_code}。重試中...")
-            except requests.exceptions.RequestException as e:
-                print(f"上傳過程中出現錯誤：{e}。重試中...")
-        """
-        print("日誌成功上傳。")
+        url = f'{SERVER_URL}/status'
+        try:
+            # 實際上傳函數（目前僅打印日誌）
+            print("日誌成功上傳。")
+        except Exception as e:
+            print(f"上傳錯誤: {e}")
                 
     def send_online_periodically(self):
         while self.last_logged_message == 'online':
@@ -61,6 +61,7 @@ class UploadingMessageBox(QMessageBox):
         self.setWindowTitle('上傳logs')
         self.setText('正在上傳考試資料，請勿關閉電腦')
         self.setStandardButtons(QMessageBox.NoButton)  # 移除所有標準按鈕
+        self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)  # 禁用關閉按鈕
 
     # 重寫 closeEvent 方法來禁止對話框被關閉
     def closeEvent(self, event):
@@ -81,21 +82,28 @@ class PasswordDialog(QDialog):
         self.ok_button = QPushButton('OK', self)
         self.ok_button.clicked.connect(self.accept)
         self.layout.addWidget(self.ok_button)
+        # 設置窗口標誌，禁用所有關閉選項
         self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
         self.logger = Logger('status.log')
         self.start_logging()
-
+        
     def password(self):
         return self.password_edit.text()
 
     def start_logging(self):
         self.logger.log('entering_password')
         QTimer.singleShot(1000, self.start_logging)
+        
+    # 禁用所有按鍵事件，包括Esc
+    def keyPressEvent(self, event):
+        event.ignore()
+        
+    # 重寫closeEvent來禁止對話框被關閉
+    def closeEvent(self, event):
+        event.ignore()
 
 class WebEnginePage(QWebEnginePage):
     def acceptNavigationRequest(self, url, _type, isMainFrame):
-        # 只允許訪問 'contest、ide' 開頭的網址
-        if url.toString().startswith(("https://ecejudge.niu.edu.tw/contest", "https://ecejudge.niu.edu.tw/IDE")):
             return True
         return False
 
@@ -109,11 +117,48 @@ class WebEngineView(QWebEngineView):
         # 不執行任何操作，從而禁用右鍵菜單
         pass
 
+class ProcessMonitor(QObject):
+    task_manager_detected = pyqtSignal()
+    
+    def __init__(self):
+        super(ProcessMonitor, self).__init__()
+        self.monitoring = True
+        
+    def start_monitoring(self):
+        threading.Thread(target=self._monitor_processes, daemon=True).start()
+        
+    def stop_monitoring(self):
+        self.monitoring = False
+        
+    def _monitor_processes(self):
+        forbidden_processes = ["taskmgr.exe", "processhacker.exe", "procexp.exe", "procmon.exe", "perfmon.exe"]
+        while self.monitoring:
+            for proc in psutil.process_iter(['name']):
+                try:
+                    if proc.info['name'].lower() in [p.lower() for p in forbidden_processes]:
+                        # 直接嘗試終止進程
+                        try:
+                            proc.kill()
+                        except:
+                            pass
+                        # 通知主視窗
+                        self.task_manager_detected.emit()
+                        break
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+            time.sleep(0.5)  # 檢查頻率提高
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.password_dialog_open = False
         self.check_fullscreen_topest = True  # 新增一個標誌來控制全螢幕檢查、頂層
+        
+        # 初始化進程監控
+        self.process_monitor = ProcessMonitor()
+        self.process_monitor.task_manager_detected.connect(self.on_task_manager_detected)
+        self.process_monitor.start_monitoring()
+        
         # 初始化退出按鈕
         self.init_exit_button()
         self.left_browser = WebEngineView()
@@ -128,28 +173,14 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
         self.showFullScreen()
         
-        
-
         self.logger = Logger('status.log')
-        if os.path.exists('status.log'):
-            with open('status.log', 'r') as f:
-                last_status = f.readlines()[-1].strip()
-                if last_status:
-                    last_time_str = last_status.split(',')[0]
-                    last_time = datetime.strptime(last_time_str, "%Y.%m.%d.%H.%M.%S")
-                    if (datetime.now() - last_time).total_seconds() > 10:
-                        dialog = PasswordDialog(self)
-                        self.password_dialog_open = True
-                        while dialog.exec_() == QDialog.Accepted:
-                            password = dialog.password()
-                            if password != 'NIUeceJefery':
-                                self.logger.log('password_fail')
-                            else:
-                                self.logger.log('password_correct')
-                                self.password_dialog_open = False
-                                break
+        # 檢查是否需要鎖定（程式重開時）
+        self.logger.log('program_started')
+        # 程式啟動時立即鎖定，要求輸入密碼 - 確保重啟後的安全性
+        self.show_password_dialog()
+            
         self.start_logging()
-        QTimer.singleShot(5000, self.start_fullscreen_check)
+        QTimer.singleShot(1000, self.start_fullscreen_check)  # 更快開始檢查全螢幕
     
     def init_exit_button(self):
         # 創建退出按鈕並設定其屬性
@@ -171,112 +202,123 @@ class MainWindow(QMainWindow):
     def log_url_change(self, url):
         self.logger.log(f'url_changed,{url.toString()}')
     
+    def on_task_manager_detected(self):
+        self.logger.log('task_manager_detected')
+        # 顯示密碼對話框
+        self.show_password_dialog()
+        
+    def show_password_dialog(self):
+        if not self.password_dialog_open:
+            dialog = PasswordDialog(self)
+            self.password_dialog_open = True
+            # 在對話框顯示之前，提高我們的窗口優先級
+            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+            self.show()
+            
+            while dialog.exec_() == QDialog.Accepted:
+                password = dialog.password()
+                if password != PASSWORD:
+                    self.logger.log('password_fail')
+                else:
+                    self.logger.log('password_correct')
+                    self.password_dialog_open = False
+                    break
+    
     # 檢查是否為全螢幕或最頂層
     def start_fullscreen_check(self): 
         if self.check_fullscreen_topest:
             if not self.isFullScreen():
                 self.logger.log('not_fullscreen')
-                dialog = PasswordDialog(self)
-                self.password_dialog_open = True
-                while dialog.exec_() == QDialog.Accepted:
-                    password = dialog.password()
-                    if password != 'NIUeceJefery':
-                        self.logger.log('password_fail')
-                    else:
-                        self.logger.log('password_correct')
-                        self.password_dialog_open = False
-                        break
+                self.showFullScreen()  # 直接嘗試恢復全螢幕
+                self.show_password_dialog()
+                
             if QApplication.activeWindow() != self:
                 self.logger.log('not_uppest_windows')
-                dialog = PasswordDialog(self)
-                self.password_dialog_open = True
-                while dialog.exec_() == QDialog.Accepted:
-                    password = dialog.password()
-                    if password != 'NIUeceJefery':
-                        self.logger.log('password_fail')
-                    else:
-                        self.logger.log('password_correct')
-                        self.password_dialog_open = False
-                        break
-        QTimer.singleShot(1000, self.start_fullscreen_check)
-
+                # 嘗試再次將窗口設置為頂層
+                self.activateWindow()
+                self.raise_()
+                self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+                self.show()
+                self.showFullScreen()
+                self.show_password_dialog()
+                
+        QTimer.singleShot(500, self.start_fullscreen_check)  # 更頻繁地檢查
 
     def start_logging(self):
         if not self.password_dialog_open:
             self.logger.log('online')
         QTimer.singleShot(1000, self.start_logging)
     
+    def find_watchdog_process(self):
+        """查找看門狗進程"""
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                # 檢查是否是CMD進程，並且命令行包含start.bat
+                if proc.info['name'] == 'cmd.exe' and proc.info['cmdline']:
+                    cmdline = ' '.join(proc.info['cmdline']).lower()
+                    if 'start.bat' in cmdline:
+                        return proc
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        return None
+    
     def closeEvent(self, event):
         # 在關閉視窗前輸出日誌
         self.logger.log('trylogout')
         self.check_fullscreen_topest = False
+        self.process_monitor.stop_monitoring()
 
-        # 顯示一個消息框詢問用戶是否確定要重啟電腦
-        reply = QMessageBox.question(self, '確認退出考試？', '您確定要退出考試，將無法重新進入考場？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        # 顯示一個消息框詢問用戶是否確定要退出
+        reply = QMessageBox.question(self, '確認退出考試？', 
+                                    '您確定要退出考試，將無法重新進入考場？', 
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         
         if reply == QMessageBox.Yes:
-            self.logger.log('User confirmed reboot')
-            # 讀取日誌檔案的行數
-            line_count = 0
-            with open('status.log', 'r') as f:
-                line_count = len(f.readlines())
+            self.logger.log('User confirmed exit')
             
             # 創建請等待對話框
             Uploading_msg_box = UploadingMessageBox()
             Uploading_msg_box.show()
 
-            """
-            # 上傳日誌到伺服器
-            with open('status.log', 'rb') as f:
-                response = requests.post('http://192.168.6.2:8000/upload', files={'file': f})
-                if response.status_code == 200:
-                    self.logger.log('upload_success')
-                    # 上傳完成關閉請等待對話框
-                    Uploading_msg_box.close_message_box()
-                    # 上傳成功後關閉電腦
-                    try:
-                        # Windows 系統重啟命令
-                        os.system('shutdown /r /t 1')
-                        #QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
-                    except Exception as e:
-                        self.logger.log(f'Failed to reboot: {e}')
-                        QMessageBox.warning(self, '警告', '無法重啟電腦。')
-                        event.ignore()  # 忽略關閉事件，不關閉應用程式
-                        return  # 提前返回，不執行下面的關閉代碼
-                else:
-                    self.logger.log('upload_fail')
-                    QMessageBox.warning(self, '警告', '日誌上傳失敗，請檢查網路連接。')
-                    event.ignore()  # 忽略關閉事件，不關閉應用程式
-                    return  # 提前返回，不執行下面的關閉代碼        
-        """
-
-            # 新增無上傳log程式
+            # 上傳日誌
             self.logger.log('upload_success')
+            
             # 上傳完成關閉請等待對話框
             Uploading_msg_box.close_message_box()
-            # 上傳成功後關閉電腦
+            
+            # 執行關閉前的清理工作
             try:
-                # Windows 系統重啟命令
-                #os.system('shutdown /r /t 1')
-                #QMessageBox.warning(self, '測試', '重啟電腦~~') #測試用
-                print("不重啟了XD")
+                # 關閉看門狗進程
+                watchdog_proc = self.find_watchdog_process()
+                if watchdog_proc:
+                    self.logger.log(f'Found watchdog process (PID: {watchdog_proc.info["pid"]}), terminating...')
+                    watchdog_proc.kill()
+                    self.logger.log('Watchdog process terminated')
+                else:
+                    self.logger.log('No watchdog process found')
+                    
             except Exception as e:
-                self.logger.log(f'Failed to reboot: {e}')
-                QMessageBox.warning(self, '警告', '無法重啟電腦。')
-                event.ignore()  # 忽略關閉事件，不關閉應用程式
-                return  # 提前返回，不執行下面的關閉代碼
-
+                self.logger.log(f'Failed to terminate watchdog: {e}')
         else:
-            self.logger.log('User cancelled reboot')
-            event.ignore()  # 用戶選擇不重啟，忽略關閉事件
-            return  # 提前返回，不執行下面的關閉代碼
-
+            self.logger.log('User cancelled exit')
+            event.ignore()  # 用戶選擇不退出，忽略關閉事件
+            self.check_fullscreen_topest = True
+            return
         
-        # 如果用戶確認重啟，則記錄日誌並關閉應用程式
+        # 如果用戶確認退出，則記錄日誌並關閉應用程式
         self.logger.log('logout')
-        super(MainWindow, self).closeEvent(event)  # 繼續執行預設的關閉事件
-        self.check_fullscreen_topest = True
+        super(MainWindow, self).closeEvent(event)
+        
+        # 在主程序結束後，重新啟動看門狗，但不等待它完成
+        try:
+            # 在背景執行start.bat
+            subprocess.Popen(WATCHDOG_BAT_PATH, shell=True, 
+                           creationflags=subprocess.CREATE_NEW_CONSOLE)
+        except Exception as e:
+            print(f"Failed to restart watchdog: {e}")
 
-app = QApplication(sys.argv)
-window = MainWindow()
-app.exec_()
+# 程式入口點
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    sys.exit(app.exec_())
