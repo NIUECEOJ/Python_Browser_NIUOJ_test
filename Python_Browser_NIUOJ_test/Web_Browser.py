@@ -218,18 +218,45 @@ class PasswordDialog(QDialog):
         event.ignore()
 
 class WebEnginePage(QWebEnginePage):
+    def __init__(self, parent=None):
+        super(WebEnginePage, self).__init__(parent)
+        self.logger = Logger('status.log')  # 添加 logger 用於記錄未授權的訪問嘗試
+        
     def acceptNavigationRequest(self, url, _type, isMainFrame):
-        # 只允許訪問 'contest、ide' 開頭的網址
-        if url.toString().startswith(("https://ecejudge.niu.edu.tw/contest", "https://ecejudge.niu.edu.tw/IDE")):
-            return True
-        return False
+        url_string = url.toString()
+        # 更精確的檢查，使用正則表達式或者更嚴格的條件
+        allowed = False
+        
+        # 檢查是否為允許的 URL 模式
+        if (url_string.startswith("https://ecejudge.niu.edu.tw/contest") or 
+            url_string.startswith("https://ecejudge.niu.edu.tw/IDE")):
+            allowed = True
+        
+        # 記錄嘗試訪問的 URL
+        if not allowed and isMainFrame:
+            self.logger.log(f'blocked_url_access: {url_string}')
+            # 可以考慮重定向到一個允許的頁面
+            if "ecejudge.niu.edu.tw" in url_string:
+                # 如果是同一域名但不在允許的路徑，重定向到 contest 頁面
+                self.load(QUrl('https://ecejudge.niu.edu.tw/contest'))
+            
+        return allowed
 
 # 在創建 QWebEngineView 時，使用自定義的 WebEnginePage
 class WebEngineView(QWebEngineView):
     def __init__(self, parent=None):
         super(WebEngineView, self).__init__(parent)
         self.setPage(WebEnginePage(self))
-
+        self.urlChanged.connect(self.check_url)
+        self.logger = Logger('status.log')
+    def check_url(self, url):
+        """實時檢查 URL 變更，如果不符合要求則重定向"""
+        url_string = url.toString()
+        if not (url_string.startswith("https://ecejudge.niu.edu.tw/contest") or 
+                url_string.startswith("https://ecejudge.niu.edu.tw/IDE")):
+            self.logger.log(f'redirect_from_unauthorized_url: {url_string}')
+            # 重定向回許可的頁面
+            self.load(QUrl('https://ecejudge.niu.edu.tw/contest'))
     def contextMenuEvent(self, event):
         # 不執行任何操作，從而禁用右鍵菜單
         pass
