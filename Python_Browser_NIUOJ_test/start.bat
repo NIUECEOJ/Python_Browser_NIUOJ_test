@@ -6,6 +6,7 @@ set "debug_mode=false"
 for /f "delims=" %%i in ('where python') do set "python_exe=%%i"
 
 if not defined python_exe (
+	echo Python interpreter not found.
     echo Python interpreter not found. >> cmdlog.log
     pause
     exit /b 1
@@ -14,6 +15,7 @@ if not defined python_exe (
 set "python_path=%python_exe%"
 set "script_path=.\Web_Browser.py"
 
+echo Installing required Python libraries...
 echo Installing required Python libraries... >> cmdlog.log
 python -m pip install --upgrade pip >> cmdlog.log 2>&1
 python -m pip install PyQt5 >> cmdlog.log 2>&1
