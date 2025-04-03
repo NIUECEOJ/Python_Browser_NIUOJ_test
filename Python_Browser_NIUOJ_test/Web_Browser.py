@@ -104,10 +104,6 @@ class PasswordDialog(QDialog):
 
 class WebEnginePage(QWebEnginePage):
     def acceptNavigationRequest(self, url, _type, isMainFrame):
-        url_string = url.toString()
-        # 只允許訪問特定路徑的網址，並禁止含有status的路徑
-        if (url_string.startswith(("https://ecejudge.niu.edu.tw/contest", "https://ecejudge.niu.edu.tw/IDE")) 
-            and "status" not in url_string.lower()):
             return True
         return False
 
