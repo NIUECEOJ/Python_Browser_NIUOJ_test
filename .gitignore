@@ -130,3 +130,5 @@ dmypy.json
 
 # ZIP
 *zip
+# debug log
+cmdlog.log
